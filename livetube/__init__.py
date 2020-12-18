@@ -18,3 +18,6 @@ try:
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 except ModuleNotFoundError:
     pass
+
+from .__main__ import Youtube
+from .utils.excpetions import *
