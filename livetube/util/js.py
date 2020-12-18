@@ -69,6 +69,34 @@ def video_info_url(video_id: str, watch_url: str) -> str:
             ("eurl", quote(watch_url)),
             ("hl", "en_US"),
             ("cpn", "PInLukK97Gqrbq8W"),
+
+            ("cbr", "Chrome"),
+            ("html5", "1"),
+            ("ps", "desktop-polymer"),
+            ("el", "adunit"),
+            ("aqi", "cNHcX7SjC9H6gQO-xqSAAg"),
+            ("sts", "18613"),
+            ("lact", "238"),
+            ("cbr", "Chrome"),
+            ("cbrver", "87.0.4280.88"),
+            ("c", "WEB"),
+            ("cver", "2.20201216.08.00"),
+            ("cplayer", "UNIPLAYER"),
+            ("cos", "Windows"),
+            ("cosver", "10.0"),
+            ("cplatform", "DESKTOP"),
+            ("adformat", "15_2_1"),
+            ("break_type", "1"),
+            ("encoded_ad_playback_context",
+             "CA8QAhgBKgtHbzJKUkdiaGxFMEIWY05IY1g3U2pDOUg2Z1FPLXhxU0FBZ2ABdfYvfT_4AgGQA6_L0YHvDA%253D%253D"),
+            ("iv_load_policy", "1"),
+
+            ("autoplay", "1"),
+            ("width", "1062"),
+            ("height", "598"),
+            ("content_v", "Go2JRGbhlE0"),
+            ("vis", "3"),
+            ("living_room_app_mode", "LIVING_ROOM_APP_MODE_UNSPECIFIED")
         ]
     )
     return "https://youtube.com/get_video_info?" + urlencode(params)

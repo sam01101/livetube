@@ -144,3 +144,11 @@ class playerResponse:
                     pass
                 else:
                     raise LiveStreamOffline
+
+    def update(self, update_items: dict):
+        if update_items.get('playabilityStatus'):
+            self.playabilityStatus.__dict__.update(update_items.get('playabilityStatus'))
+        if update_items.get('responseContext'):
+            self.responseContext.__dict__.update(update_items.get('responseContext'))
+        if update_items.get('streamingData'):
+            self.streamData.__dict__.update(update_items.get('streamingData'))

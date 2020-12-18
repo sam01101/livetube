@@ -75,7 +75,10 @@ class Youtube:
         self.api_key: Optional[str] = None
         self.api_client_ver: str = "2.19970101.00.00"
         self.api_client_name: str = "WEB"
-        self.endpoint: str = f"https://www.youtube.com/youtubei/v1/updated_metadata?key="
+        self.metadata_endpoint: str = "https://www.youtube.com/youtubei/v1/updated_metadata?key="
+        # URL used to fetch heartbeat and player
+        self.heartbeat_endpoint: str = "https://www.youtube.com/youtubei/v1/player/heartbeat?alt=json&key="
+        self.player_endpoint: str = "https://www.youtube.com/youtubei/v1/player?key="
         """Key for next fetching"""
         self.continue_id: Optional[str] = None
 
@@ -103,6 +106,27 @@ class Youtube:
             body["continuation"] = self.continue_id
         else:
             body["videoId"] = self.video_id
+        return json.dumps(body)
+
+    def create_heartbeat_body(self) -> str:
+        """
+        Create a dummy heartbeat body and dump as json
+        :return: json string
+        """
+        body = {
+            "context": {
+                "client": {
+                    "hl": "en_US",
+                    "clientName": self.api_client_name,
+                    "clientVersion": self.api_client_ver
+                }
+            },
+            "heartbeatRequestParams": {
+                "heartbeatChecks": [
+                    "HEARTBEAT_CHECK_TYPE_LIVE_STREAM_STATUS"
+                ]
+            }
+        }
         return json.dumps(body)
 
     def update_actions(self, actions: list):
@@ -178,7 +202,7 @@ class Youtube:
                     self.player_response.videoDetails.title = full_title
 
     async def fetch_metadata(self):
-        async with self.http.post(self.endpoint, data=self.create_metadata_body()) as response:
+        async with self.http.post(self.metadata_endpoint, data=self.create_metadata_body()) as response:
             try:
                 r: dict = await response.json()
                 if not self.continue_id:
@@ -187,6 +211,26 @@ class Youtube:
                 # print("Error: malformed JSON data", r)
                 return
             self.update_actions(r['actions'])
+
+    async def fetch_heartbeat(self):
+        # Threat this like a dymanic update list object
+        async with self.http.post(self.heartbeat_endpoint, data=self.create_heartbeat_body()) as response:
+            try:
+                r: dict = await response.json()
+            except (json.JSONDecodeError, KeyError):
+                # print("Error: malformed JSON data", r)
+                return
+            self.player_response.update(r)
+
+    async def fetch_player(self):
+        """Get the player"""
+        async with self.http.post(self.player_endpoint, data=self.create_heartbeat_body()) as response:
+            try:
+                r: dict = await response.json()
+            except (json.JSONDecodeError, KeyError):
+                # print("Error: malformed JSON data", r)
+                return
+            self.player_response.update(r)
 
     async def fetch(self):
         """
@@ -215,6 +259,8 @@ class Youtube:
         self.api_client_ver = self.vid_info['innertube_context_client_version']
         self.player_config_args = self.vid_info
         self.player_response: playerResponse = playerResponse(json.loads(self.vid_info['player_response']))
-        """Fetch metadata for first time"""
-        self.endpoint = f"https://www.youtube.com/youtubei/{self.api_ver}/updated_metadata?key={self.api_key}"
+        """Fetch metadata and heartbeat for first time"""
+        self.metadata_endpoint = f"https://www.youtube.com/youtubei/{self.api_ver}/updated_metadata?key={self.api_key}"
+        self.heartbeat_endpoint = f"https://www.youtube.com/youtubei/{self.api_ver}/player/heartbeat?alt=json&key={self.api_key}"
+        self.player_endpoint = f"https://www.youtube.com/youtubei/{self.api_ver}/player?key={self.api_key}"
         await self.fetch_metadata()
