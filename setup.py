@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
    name='livetube',
@@ -6,6 +6,6 @@ setup(
    description='A module for youtube livestream',
    author='Sam',
    author_email='lau.sam745033858@gmail.com',
-   packages=['livetube'],
+   packages=find_packages(),
    install_requires=['aiohttp']
 )
