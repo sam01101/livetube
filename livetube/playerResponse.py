@@ -147,8 +147,11 @@ class playerResponse:
 
     def update(self, update_items: dict):
         if update_items.get('playabilityStatus'):
-            self.playabilityStatus.__dict__.update(update_items.get('playabilityStatus'))
+            new = playabilityStatus(update_items.get('playabilityStatus'))
+            self.playabilityStatus.__dict__.update(new.__dict__)
         if update_items.get('responseContext'):
-            self.responseContext.__dict__.update(update_items.get('responseContext'))
+            new = responseContext(update_items.get('responseContext'))
+            self.responseContext.__dict__.update(new.__dict__)
         if update_items.get('streamingData'):
-            self.streamData.__dict__.update(update_items.get('streamingData'))
+            new = streamingData(update_items.get('streamingData'))
+            self.streamData.__dict__.update(new.__dict__)
