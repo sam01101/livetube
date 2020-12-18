@@ -112,38 +112,36 @@ class playerResponse:
     def __init__(self, player_response: dict):
         self.responseContext = responseContext(player_response.get('responseContext'))
         self.playabilityStatus = playabilityStatus(player_response.get('playabilityStatus'))
-        allUnavalible = player_response.get('videoDetails') and player_response.get('streamData')
         if player_response.get('videoDetails'):
             self.videoDetails = videoDetails(player_response.get('videoDetails'))
         if player_response.get('streamingData'):
             self.streamData = streamingData(player_response.get('streamingData'))
-        elif allUnavalible:
-            status, reason = self.playabilityStatus.status, self.playabilityStatus.reason
-            if status == 'UNPLAYABLE':
-                if reason == (
-                        'Join this channel to get access to members-only content '
-                        'like this video, and other exclusive perks.'
-                ):
-                    raise MembersOnly
-                elif reason == 'This live stream recording is not available.':
-                    raise RecordingUnavailable
-                else:
-                    # if reason == 'Video unavailable':
-                    #     if extract.is_region_blocked(self.watch_html):
-                    #         raise VideoRegionBlocked(video_id=self.video_id)
-                    raise VideoUnavailable
-            elif status == 'LOGIN_REQUIRED':
-                if reason == (
-                        'This is a private video. '
-                        'Please sign in to verify that you may see it.'
-                ):
-                    raise VideoPrivate
+
+    def check_status(self):
+        status, reason = self.playabilityStatus.status, self.playabilityStatus.reason
+        if status == 'UNPLAYABLE':
+            if reason == (
+                    'Join this channel to get access to members-only content '
+                    'like this video, and other exclusive perks.'
+            ):
+                raise MembersOnly
+            elif reason == 'This live stream recording is not available.':
+                raise RecordingUnavailable
+            else:
+                # if reason == 'Video unavailable':
+                #     if extract.is_region_blocked(self.watch_html):
+                #         raise VideoRegionBlocked(video_id=self.video_id)
                 raise VideoUnavailable
-            elif status == 'LIVE_STREAM_OFFLINE':
-                if 'monent' not in reason:
-                    pass
-                else:
-                    raise LiveStreamOffline
+        elif status == 'LOGIN_REQUIRED':
+            if reason == (
+                    'This is a private video. '
+                    'Please sign in to verify that you may see it.'
+            ):
+                raise VideoPrivate
+            raise VideoUnavailable
+        elif status == 'LIVE_STREAM_OFFLINE':
+            if 'monent' not in reason and not self.playabilityStatus.scheduled_start_time:
+                raise LiveStreamOffline
 
     def update(self, update_items: dict):
         if update_items.get('playabilityStatus'):
@@ -154,4 +152,7 @@ class playerResponse:
             self.responseContext.__dict__.update(new.__dict__)
         if update_items.get('streamingData'):
             new = streamingData(update_items.get('streamingData'))
-            self.streamData.__dict__.update(new.__dict__)
+            try:
+                self.streamData.__dict__.update(new.__dict__)
+            except AttributeError:
+                self.streamData = new

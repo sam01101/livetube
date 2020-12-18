@@ -259,8 +259,9 @@ class Youtube:
         self.api_client_ver = self.vid_info['innertube_context_client_version']
         self.player_config_args = self.vid_info
         self.player_response: playerResponse = playerResponse(json.loads(self.vid_info['player_response']))
-        """Fetch metadata and heartbeat for first time"""
+        """Fetch metadata and player for first time"""
         self.metadata_endpoint = f"https://www.youtube.com/youtubei/{self.api_ver}/updated_metadata?key={self.api_key}"
         self.heartbeat_endpoint = f"https://www.youtube.com/youtubei/{self.api_ver}/player/heartbeat?alt=json&key={self.api_key}"
         self.player_endpoint = f"https://www.youtube.com/youtubei/{self.api_ver}/player?key={self.api_key}"
         await self.fetch_metadata()
+        await self.fetch_player()
