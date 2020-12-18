@@ -13,10 +13,10 @@ from urllib.parse import parse_qsl
 import aiohttp
 import yarl
 
-from playerResponse import playerResponse
-from utils.excpetions import RegexMatchError
-from utils.js import js_url, initial_data, video_info_url
-from utils.regex import regex_search
+from .playerResponse import playerResponse
+from .util.excpetions import RegexMatchError
+from .util.js import js_url, initial_data, video_info_url
+from .util.regex import regex_search
 
 
 # noinspection PyDefaultArgument

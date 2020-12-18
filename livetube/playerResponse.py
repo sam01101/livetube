@@ -8,7 +8,7 @@
 from enum import Enum
 from typing import Optional, Dict
 
-from utils.excpetions import MembersOnly, RecordingUnavailable, VideoUnavailable, LiveStreamOffline, VideoPrivate
+from .util.excpetions import MembersOnly, RecordingUnavailable, VideoUnavailable, LiveStreamOffline, VideoPrivate
 
 
 class responseContext:

@@ -20,4 +20,4 @@ except ModuleNotFoundError:
     pass
 
 from .__main__ import Youtube
-from .utils.excpetions import *
+from .util.excpetions import *
