@@ -171,7 +171,7 @@ class Youtube:
                 if title.get("simpleText"):
                     full_title = title.get("simpleText")
                 elif title.get("runs"):
-                    for segment in title:  # type: dict
+                    for segment in title.get("runs"):  # type: dict
                         if segment != "":
                             full_title += segment.get("text", "")
                 if self.player_response.videoDetails.title != full_title:
