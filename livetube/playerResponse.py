@@ -32,7 +32,7 @@ class playabilityStatus:
                 if offlineSlate := liveStreamabilityRenderer.get("offlineSlate"):
                     self.isCountDown = offlineSlate['liveStreamOfflineSlateRenderer'].get("canShowCountdown", False)
                     test = offlineSlate['liveStreamOfflineSlateRenderer'].get("scheduledStartTime")
-                    self.scheduled_start_time: int = int(test) if test else None
+                    self.scheduled_start_time: Optional[int] = int(test) if test else None
 
 
 class streamingData:
