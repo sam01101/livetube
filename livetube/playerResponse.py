@@ -31,8 +31,8 @@ class playabilityStatus:
                 self.pollDelayMs: int = liveStreamabilityRenderer.get("pollDelayMs", 5000)
                 if offlineSlate := liveStreamabilityRenderer.get("offlineSlate"):
                     self.isCountDown = offlineSlate['liveStreamOfflineSlateRenderer'].get("canShowCountdown", False)
-                    self.scheduled_start_time: int = int(
-                        offlineSlate['liveStreamOfflineSlateRenderer']['scheduledStartTime'])
+                    test = offlineSlate['liveStreamOfflineSlateRenderer'].get("scheduledStartTime")
+                    self.scheduled_start_time: int = int(test) if test else None
 
 
 class streamingData:
