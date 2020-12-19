@@ -7,6 +7,8 @@
 """
 import asyncio
 import json
+from hashlib import sha1
+from time import time
 from typing import Optional, Dict, Union
 from urllib.parse import parse_qsl
 
@@ -23,14 +25,14 @@ from .util.regex import regex_search
 class Youtube:
     def __init__(self,
                  video_id: str,
-                 header: Optional[Dict[str, Union[str, bool, int]]] = None,
-                 cookie: Optional[dict] = None):
+                 cookie: dict,
+                 header: Optional[Dict[str, Union[str, bool, int]]] = None):
         """
         創造一個Youtube obj
 
         :param video_id: Video ID, 可以是网址
+        :param cookie: Cookie
         :param header: 额外的Header
-        :param cookie: Cookie, 各种用法, 具体参考Youtube-DL
         """
 
         # Pre fetch
@@ -54,13 +56,23 @@ class Youtube:
         # Header
         self.header = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)"
-                          " Chrome/87.0.4280.88 Safari/537.36"
+                          " Chrome/87.0.4280.88 Safari/537.36",
+            "X-Origin": "https://www.youtube.com"
         }
         if header:
             self.header.update(header)
 
         # Client setup
+        # Checking SAPISID from cookie
+        if not cookie.get("SAPISID"):
+            print("SAPISID not found, please check your cookie.")
+            exit(1)
+        # Fuck cookie jar, i'm out.
         self.cookie = cookie
+        self.cookie_jar = aiohttp.CookieJar(unsafe=True, quote_cookie=False)
+        self.cookie_jar.update_cookies(self.cookie)
+        # self.cookie_header = {"Cookie": " ".join([f"{name}={value};" for name, value in cookie.items()])}
+        # self.header.update(self.cookie_header)
         self.http: Optional[aiohttp.ClientSession] = None
 
         # Raw of video info
@@ -87,7 +99,7 @@ class Youtube:
         if loop and not self.http.closed:
             asyncio.ensure_future(self.http.close(), loop=loop)
 
-    def create_metadata_body(self) -> str:
+    def create_metadata_body(self, force_video_id: bool = False) -> str:
         """
         Create a dummy metadata body and dump as json
         :return: json string
@@ -102,7 +114,7 @@ class Youtube:
                 }
             }
         }
-        if self.continue_id:
+        if not force_video_id and self.continue_id:
             body["continuation"] = self.continue_id
         else:
             body["videoId"] = self.video_id
@@ -125,16 +137,24 @@ class Youtube:
                 "heartbeatChecks": [
                     "HEARTBEAT_CHECK_TYPE_LIVE_STREAM_STATUS"
                 ]
-            }
+            },
+            "videoId": self.video_id
         }
         return json.dumps(body)
+
+    def get_exec_text(self, text: list) -> str:
+        # exection = runs
+        ret = ""
+        for cmd in text:
+            ret += cmd['text']
+        return ret
 
     def update_actions(self, actions: list):
         for action in actions:  # type: dict
             if updateViewershipAction := action.get("updateViewershipAction"):
                 """1,901 watching now"""
                 # Btw isLive is inside
-                data: dict = updateViewershipAction['viewCount']['videoViewCountRenderer']
+                data: dict = updateViewershipAction['viewCount']
                 if data:
                     """    ==Structure==
                         viewCount {
@@ -156,8 +176,10 @@ class Youtube:
                     """
                     if info := data.get("videoViewCountRenderer"):
                         if info.get("viewCount"):
+                            text = self.get_exec_text(info['viewCount']['runs']) if info['viewCount'].get("runs") else \
+                            info['viewCount']['simpleText']
                             self.player_response.videoDetails.liveViewCount = \
-                                int(''.join(filter(str.isdigit, info['viewCount']['simpleText'])))
+                                int(''.join(filter(str.isdigit, text)))
                         if info.get("isLive"):
                             self.player_response.videoDetails.isLive = info['isLive']
                         if info.get("extraShortViewCount"):
@@ -202,7 +224,9 @@ class Youtube:
                     self.player_response.videoDetails.title = full_title
 
     async def fetch_metadata(self):
-        async with self.http.post(self.metadata_endpoint, data=self.create_metadata_body()) as response:
+        print(time(), "Fetch metadata")
+        async with self.http.post(self.metadata_endpoint, data=self.create_metadata_body(),
+                                  headers=self.calculate_SNAPPISH()) as response:
             try:
                 r: dict = await response.json()
                 if not self.continue_id:
@@ -213,8 +237,10 @@ class Youtube:
             self.update_actions(r['actions'])
 
     async def fetch_heartbeat(self):
+        print(time(), "Fetch heartbeat")
         # Threat this like a dymanic update list object
-        async with self.http.post(self.heartbeat_endpoint, data=self.create_heartbeat_body()) as response:
+        async with self.http.post(self.heartbeat_endpoint, data=self.create_heartbeat_body(),
+                                  headers=self.calculate_SNAPPISH()) as response:
             try:
                 r: dict = await response.json()
             except (json.JSONDecodeError, KeyError):
@@ -224,7 +250,8 @@ class Youtube:
 
     async def fetch_player(self):
         """Get the player"""
-        async with self.http.post(self.player_endpoint, data=self.create_heartbeat_body()) as response:
+        async with self.http.post(self.player_endpoint, data=self.create_metadata_body(True),
+                                  headers=self.calculate_SNAPPISH()) as response:
             try:
                 r: dict = await response.json()
             except (json.JSONDecodeError, KeyError):
@@ -232,25 +259,38 @@ class Youtube:
                 return
             self.player_response.update(r)
 
+    def calculate_SNAPPISH(self):
+        """
+        Calculate SAPISIDHASH and return header
+        Source: https://stackoverflow.com/questions/16907352/reverse-engineering-javascript-behind-google-button
+        Algorithm: SHA1(Timestamp + " " + SAPISID + " " + Origin)
+        Header: Authorization: SAPISIDHASH timestamp_<SAPISIDHASH>
+        """
+        timestamp = str(int(time()))
+        SAPISID = self.cookie['SAPISID']
+        Origin = self.header['X-Origin']
+        raw = " ".join([timestamp, SAPISID, Origin])
+        _hash = sha1(bytes(raw, encoding="utf8")).hexdigest()
+        return {"Authorization": f"SAPISIDHASH {timestamp}_{_hash}"}
+        # SAPISIDHASH 1608384358_9c8c91868ac1be1b21a6c62eb769ec04f53d7ffb
+
     async def fetch(self):
         """
         Fetch the youtube main page to get initialize data
         """
         if self.http is None:
-            self.http = aiohttp.ClientSession(cookies=self.cookie, headers=self.header)
-        async with self.http.get(self.watch_url) as response:
+            self.http = aiohttp.ClientSession(headers=self.header, cookie_jar=self.cookie_jar)
+        async with self.http.get(self.watch_url, headers=self.header) as response:
             self.watch_html = await response.text()
         self.vid_info_url = video_info_url(
             self.video_id, self.watch_url
         )
         self.js_url = js_url(self.watch_html)
         self.initial_data = initial_data(self.watch_html)
-        async with self.http.get(yarl.URL(self.vid_info_url, encoded=True), headers={
-            "Origin": "https://www.youtube.com",
-            "Referer": f"https://www.youtube.com/watch?v={self.video_id}"
-        }) as response:
+        async with self.http.get(yarl.URL(self.vid_info_url, encoded=True),
+                                 headers=self.calculate_SNAPPISH()) as response:
             self.vid_info_raw = await response.text()
-        async with self.http.get(self.js_url) as response:
+        async with self.http.get(self.js_url, headers=self.calculate_SNAPPISH()) as response:
             self.js = await response.text()
         #  Descramble the stream data and build Stream instances.
         self.vid_info = dict(parse_qsl(self.vid_info_raw))
@@ -264,4 +304,4 @@ class Youtube:
         self.heartbeat_endpoint = f"https://www.youtube.com/youtubei/{self.api_ver}/player/heartbeat?alt=json&key={self.api_key}"
         self.player_endpoint = f"https://www.youtube.com/youtubei/{self.api_ver}/player?key={self.api_key}"
         await self.fetch_metadata()
-        await self.fetch_player()
+        await self.fetch_heartbeat()
