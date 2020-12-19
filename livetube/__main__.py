@@ -224,7 +224,6 @@ class Youtube:
                     self.player_response.videoDetails.title = full_title
 
     async def fetch_metadata(self):
-        print(time(), "Fetch metadata")
         async with self.http.post(self.metadata_endpoint, data=self.create_metadata_body(),
                                   headers=self.calculate_SNAPPISH()) as response:
             try:
@@ -237,7 +236,6 @@ class Youtube:
             self.update_actions(r['actions'])
 
     async def fetch_heartbeat(self):
-        print(time(), "Fetch heartbeat")
         # Threat this like a dymanic update list object
         async with self.http.post(self.heartbeat_endpoint, data=self.create_heartbeat_body(),
                                   headers=self.calculate_SNAPPISH()) as response:
