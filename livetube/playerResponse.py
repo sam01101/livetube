@@ -91,7 +91,7 @@ class videoDetails:
         self.channel_id: str = data.get('channelId')
         self.channel_name: str = data.get('author')
         self.title: str = data.get("title", "")
-        self.lengthSeconds: int = data.get("lengthSeconds", -1)
+        self.lengthSeconds: int = int(data.get("lengthSeconds", -1))
         self.isLive: bool = data.get('isLive', False)
         self.keywords: list = data.get('keywords', [])
         self.shortDescription: str = data.get('shortDescription', "")
