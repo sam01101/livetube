@@ -8,7 +8,9 @@
 from enum import Enum
 from typing import Optional, Dict
 
-from .util.excpetions import MembersOnly, RecordingUnavailable, VideoUnavailable, LiveStreamOffline, VideoPrivate
+from .util.excpetions import MembersOnly, RecordingUnavailable, VideoUnavailable, LiveStreamOffline, VideoPrivate, \
+    RegexMatchError
+from .util.regex import regex_search
 
 
 class responseContext:
@@ -37,6 +39,15 @@ class streamingData:
     def __init__(self, data: dict):
         if data.get('expiresInSeconds'):
             self.expiresInSeconds: int = data.get('expiresInSeconds')
+            self.hlsManifestUrl: str = data.get('hlsManifestUrl')
+            self.dashManifestUrl: str = data.get('dashManifestUrl')
+            # Get timestamp of expire time
+            if fmt_link := (self.hlsManifestUrl or self.dashManifestUrl):
+                # /expire/????????????/
+                try:
+                    self.expireTimestamp: int = int(regex_search(r"/expire/(\d+)/", fmt_link, 1))
+                except RegexMatchError:
+                    pass
             adaptiveFormats: list = data.get("adaptiveFormats", [])
             self.audios: Dict[str, dict] = {}
             self.videos: Dict[str, dict] = {}
@@ -63,7 +74,6 @@ class streamingData:
                     best = formats
             if best:
                 self.videos['best'] = best
-            self.hlsManifestUrl: str = data.get('hlsManifestUrl')
 
 
 class latencyType(Enum):

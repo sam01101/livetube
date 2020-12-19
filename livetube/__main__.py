@@ -177,7 +177,7 @@ class Youtube:
                     if info := data.get("videoViewCountRenderer"):
                         if info.get("viewCount"):
                             text = self.get_exec_text(info['viewCount']['runs']) if info['viewCount'].get("runs") else \
-                            info['viewCount']['simpleText']
+                                info['viewCount']['simpleText']
                             self.player_response.videoDetails.liveViewCount = \
                                 int(''.join(filter(str.isdigit, text)))
                         if info.get("isLive"):
