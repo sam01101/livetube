@@ -233,7 +233,8 @@ class Youtube:
             except (json.JSONDecodeError, KeyError):
                 # print("Error: malformed JSON data", r)
                 return
-            self.update_actions(r['actions'])
+            if actions := r.get("actions"):
+                self.update_actions(actions)
 
     async def fetch_heartbeat(self):
         # Threat this like a dymanic update list object
@@ -270,7 +271,6 @@ class Youtube:
         raw = " ".join([timestamp, SAPISID, Origin])
         _hash = sha1(bytes(raw, encoding="utf8")).hexdigest()
         return {"Authorization": f"SAPISIDHASH {timestamp}_{_hash}"}
-        # SAPISIDHASH 1608384358_9c8c91868ac1be1b21a6c62eb769ec04f53d7ffb
 
     async def fetch(self):
         """
