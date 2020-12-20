@@ -38,7 +38,7 @@ class playabilityStatus:
 class streamingData:
     def __init__(self, data: dict):
         if data.get('expiresInSeconds'):
-            self.expiresInSeconds: int = data.get('expiresInSeconds')
+            self.expiresInSeconds: int = int(data.get('expiresInSeconds'))
             self.hlsManifestUrl: str = data.get('hlsManifestUrl')
             self.dashManifestUrl: str = data.get('dashManifestUrl')
             # Get timestamp of expire time
