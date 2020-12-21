@@ -226,6 +226,8 @@ class Youtube:
     async def fetch_metadata(self):
         async with self.http.post(self.metadata_endpoint, data=self.create_metadata_body(),
                                   headers=self.calculate_SNAPPISH()) as response:
+            if response.status != 200:
+                return
             try:
                 r: dict = await response.json()
                 if not self.continue_id:
@@ -240,6 +242,8 @@ class Youtube:
         # Threat this like a dymanic update list object
         async with self.http.post(self.heartbeat_endpoint, data=self.create_heartbeat_body(),
                                   headers=self.calculate_SNAPPISH()) as response:
+            if response.status != 200:
+                return
             try:
                 r: dict = await response.json()
             except (json.JSONDecodeError, KeyError):
@@ -251,6 +255,8 @@ class Youtube:
         """Get the player"""
         async with self.http.post(self.player_endpoint, data=self.create_metadata_body(True),
                                   headers=self.calculate_SNAPPISH()) as response:
+            if response.status != 200:
+                return
             try:
                 r: dict = await response.json()
             except (json.JSONDecodeError, KeyError):
