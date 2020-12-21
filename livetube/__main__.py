@@ -264,6 +264,20 @@ class Youtube:
                 return
             self.player_response.update(r)
 
+    async def fetch_video_info(self):
+        async with self.http.get(yarl.URL(self.vid_info_url, encoded=True),
+                                 headers=self.calculate_SNAPPISH()) as response:
+            self.vid_info_raw = await response.text()
+        # async with self.http.get(self.js_url, headers=self.calculate_SNAPPISH()) as response:
+        #     self.js = await response.text()
+        #  Descramble the stream data and build Stream instances.
+        self.vid_info = dict(parse_qsl(self.vid_info_raw))
+        self.api_ver = self.vid_info['innertube_api_version']
+        self.api_key = self.vid_info['innertube_api_key']
+        self.api_client_ver = self.vid_info['innertube_context_client_version']
+        self.player_config_args = self.vid_info
+        self.player_response: playerResponse = playerResponse(json.loads(self.vid_info['player_response']))
+
     def calculate_SNAPPISH(self):
         """
         Calculate SAPISIDHASH and return header
@@ -291,18 +305,7 @@ class Youtube:
         )
         self.js_url = js_url(self.watch_html)
         self.initial_data = initial_data(self.watch_html)
-        async with self.http.get(yarl.URL(self.vid_info_url, encoded=True),
-                                 headers=self.calculate_SNAPPISH()) as response:
-            self.vid_info_raw = await response.text()
-        async with self.http.get(self.js_url, headers=self.calculate_SNAPPISH()) as response:
-            self.js = await response.text()
-        #  Descramble the stream data and build Stream instances.
-        self.vid_info = dict(parse_qsl(self.vid_info_raw))
-        self.api_ver = self.vid_info['innertube_api_version']
-        self.api_key = self.vid_info['innertube_api_key']
-        self.api_client_ver = self.vid_info['innertube_context_client_version']
-        self.player_config_args = self.vid_info
-        self.player_response: playerResponse = playerResponse(json.loads(self.vid_info['player_response']))
+        await self.fetch_video_info()
         """Fetch metadata and player for first time"""
         self.metadata_endpoint = f"https://www.youtube.com/youtubei/{self.api_ver}/updated_metadata?key={self.api_key}"
         self.heartbeat_endpoint = f"https://www.youtube.com/youtubei/{self.api_ver}/player/heartbeat?alt=json&key={self.api_key}"
