@@ -36,11 +36,11 @@ class playabilityStatus:
     status: str
     reason: str
     last_reason: Optional[str] = None
-    subreason: Optional[str]
+    subreason: Optional[str] = None
     playableInEmbed: bool
     pollDelayMs: int
     isCountDown: bool
-    scheduled_start_time: Optional[int]
+    scheduled_start_time: Optional[int] = None
 
     def __init__(self, data: dict):
         self.status = data.get("status", "UNPLAYABLE")
