@@ -206,7 +206,7 @@ class Youtube:
                 displayText = updateDateTextAction['dateText']['simpleText']
                 for p, name in pattern.items():
                     try:
-                        time: int = int(regex_search(r"\d+" + p, displayText, 1))
+                        time: int = int(regex_search(r"(\d+) " + p, displayText, 1))
                         self.player_response.videoDetails.startedSince = f"{time} {name}前"
                         break
                     except RegexMatchError:
