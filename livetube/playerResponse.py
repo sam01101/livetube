@@ -136,6 +136,7 @@ class videoDetails:
     def __init__(self, data: Optional[dict] = None, extra_data: Optional[dict] = None):
         # Basic info
         if data:
+            self.isLive = data.get("isLive", False)
             self.video_id = data.get('videoId', "")
             self.channel_id = data.get('channelId', "")
             self.channel_name = data.get('author', "Unknown")
@@ -154,7 +155,6 @@ class videoDetails:
                 "ULTRALOW": "超低延迟(~1-3s) [不支持字幕, 1440p 和 4K]"
             }
             self.latencyText = types.get(self.latencyClass.value, "无法显示")
-        self.isLive = extra_data['playerMicroformatRenderer']['liveBroadcastDetails']['isLiveNow'] if extra_data['playerMicroformatRenderer'].get("liveBroadcastDetails") else data.get('isLive', False)
         self.title = extra_data['playerMicroformatRenderer']['title']['simpleText'] if extra_data else data['title']
         self.lengthSeconds = int(
             (extra_data['playerMicroformatRenderer'] if extra_data else data).get("lengthSeconds", 0))
@@ -184,6 +184,7 @@ class playerResponse:
         self.playabilityStatus = playabilityStatus(player_response.get('playabilityStatus'))
         if player_response.get('videoDetails'):
             self.videoDetails = videoDetails(player_response.get('videoDetails'), player_response.get('microformat'))
+            self.videoDetails.isLive = self.playabilityStatus.status == "OK" and self.playabilityStatus.reason == ""
         if player_response.get('streamingData'):
             self.streamData = streamingData(player_response.get('streamingData'))
 
