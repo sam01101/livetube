@@ -19,7 +19,8 @@ def extract_string(data: dict):
     elif flows := data.get("runs"):
         text = ""
         for flow in flows:
-            text += flow['text']
+            if "<" not in flow['text']:
+                text += flow['text']
         return text
 
 
