@@ -9,8 +9,18 @@ from enum import Enum
 from typing import Optional, Dict
 
 from .util.excpetions import MembersOnly, RecordingUnavailable, VideoUnavailable, LiveStreamOffline, VideoPrivate, \
-    RegexMatchError
+    RegexMatchError, VideoRegionBlocked, PaymentRequired
 from .util.regex import regex_search
+
+
+def extract_string(data: dict):
+    if text := data.get("simpleText"):
+        return text
+    elif flows := data.get("runs"):
+        text = ""
+        for flow in flows:
+            text += flow['text']
+        return text
 
 
 class responseContext:
@@ -22,17 +32,30 @@ class responseContext:
 
 
 class playabilityStatus:
+    status: str
+    reason: str
+    subreason: Optional[str]
+    playableInEmbed: bool
+    pollDelayMs: int
+    isCountDown: bool
+    scheduled_start_time: Optional[int]
+
     def __init__(self, data: dict):
-        self.status: str = data.get("status", "UNPLAYABLE")
-        self.reason: str = data.get("reason", "")
-        self.playableInEmbed: bool = data.get('playableInEmbed', False)
+        self.status = data.get("status", "UNPLAYABLE")
+        self.reason = data.get("reason", "")
+        if errorScreen := data.get("errorScreen"):
+            if errorScreen.get('playerLegacyDesktopYpcTrailerRenderer'):
+                pass  # Not parsing the free trailer
+            if subreason := errorScreen.get("playerErrorMessageRenderer", {}).get("subreason"):
+                self.subreason = extract_string(subreason)
+        self.playableInEmbed = data.get('playableInEmbed', False)
         if liveStreamability := data.get('liveStreamability'):
             if liveStreamabilityRenderer := liveStreamability.get("liveStreamabilityRenderer"):
-                self.pollDelayMs: int = liveStreamabilityRenderer.get("pollDelayMs", 5000)
+                self.pollDelayMs = liveStreamabilityRenderer.get("pollDelayMs", 5000)
                 if offlineSlate := liveStreamabilityRenderer.get("offlineSlate"):
                     self.isCountDown = offlineSlate['liveStreamOfflineSlateRenderer'].get("canShowCountdown", False)
                     test = offlineSlate['liveStreamOfflineSlateRenderer'].get("scheduledStartTime")
-                    self.scheduled_start_time: Optional[int] = int(test) if test else None
+                    self.scheduled_start_time = int(test) if test else None
 
 
 class streamingData:
@@ -86,49 +109,83 @@ class latencyType(Enum):
 
 
 class videoDetails:
-    def __init__(self, data: dict):
-        self.video_id: str = data.get('videoId')
-        self.channel_id: str = data.get('channelId')
-        self.channel_name: str = data.get('author')
-        self.title: str = data.get("title", "")
-        self.lengthSeconds: int = int(data.get("lengthSeconds", -1))
-        self.isLive: bool = data.get('isLive', False)
-        self.keywords: list = data.get('keywords', [])
-        self.shortDescription: str = data.get('shortDescription', "")
-        self.isLiveDvrEnabled: bool = data.get('isLiveDvrEnabled', False)
-        thumbnails: list = data.get('thumbnail', {}).get("thumbnails", [])
-        self.thumbnail: str = thumbnails[len(thumbnails) - 1]['url']
-        # View count info
-        self.viewCount: int = int(data.get('viewCount'))
-        self.liveViewCount: Optional[int] = None
-        self.liveShortViewCount: Optional[str] = None
-        self.startedSince: Optional[str] = None
-        # Like/Dislike
-        self.shortLikeCount: Optional[str] = None
-        self.shortDislikeCount: Optional[str] = None
-        self.private: bool = data.get('isPrivate', False)
-        self.isLowLatencyLiveStream: bool = data.get('isLowLatencyLiveStream', False)
-        if self.isLowLatencyLiveStream:
+    video_id: str
+    channel_id: str
+    title: str
+    lengthSeconds: int
+    isLive: bool
+    keywords: list
+    shortDescription: str
+    isLiveDvrEnabled: bool
+    thumbnail: str
+    isUnlisted: bool = False
+    viewCount: int
+    private: bool
+    liveViewCount: Optional[int]
+    liveShortViewCount: Optional[int]
+    startedSince: Optional[str]
+    shortLikeCount: Optional[str]
+    shortDislikeCount: Optional[str]
+    isLowLatencyLiveStream: Optional[bool]
+    latencyClass: latencyType
+    latencyText: Optional[str]
+
+    def __init__(self, data: Optional[dict] = None, extra_data: Optional[dict] = None):
+        # Basic info
+        if data:
+            self.video_id = data.get('videoId', "")
+            self.channel_id = data.get('channelId', "")
+            self.channel_name = data.get('author', "Unknown")
+            self.isLive = data.get('isLive', False)
+            self.keywords = data.get('keywords', [])
+            self.shortDescription = data.get('shortDescription', "")
+            self.isLiveDvrEnabled = data.get('isLiveDvrEnabled', False)
+            self.private = data.get('isPrivate', False)
+            self.isLowLatencyLiveStream = data.get('isLowLatencyLiveStream', False)
+            try:
+                self.latencyClass = latencyType[data.get('latencyClass')]
+            except KeyError:
+                self.latencyClass = latencyType.NORMAL
             types = {
                 "NORMAL": "普通(~7s+)",
                 "LOW": "低延迟(~4-6s) [不支持 4K]",
                 "ULTRALOW": "超低延迟(~1-3s) [不支持字幕, 1440p 和 4K]"
             }
-            self.latencyClass: latencyType = latencyType[data.get('latencyClass')]
-            self.latencyText: str = types.get(self.latencyClass.value, "无法显示")
+            self.latencyText = types.get(self.latencyClass.value, "无法显示")
+        self.title = extra_data['playerMicroformatRenderer']['title']['simpleText'] if extra_data else data['title']
+        self.lengthSeconds = int(
+            (extra_data['playerMicroformatRenderer'] if extra_data else data).get("lengthSeconds", 0))
+        thumbnails = (extra_data['playerMicroformatRenderer'] if extra_data else data)['thumbnail']['thumbnails']
+        self.thumbnail = thumbnails[len(thumbnails) - 1]['url']
+        # Extra basic info
+        if extra_data:
+            self.isUnlisted = extra_data['playerMicroformatRenderer'].get('isUnlisted', False)
+        # View count info
+        self.viewCount = int((extra_data['playerMicroformatRenderer'] if extra_data else data).get('viewCount'), 0)
+        self.liveViewCount = None
+        self.liveShortViewCount = None
+        self.startedSince = None
+        # Like/Dislike
+        self.shortLikeCount = None
+        self.shortDislikeCount = None
 
 
 class playerResponse:
+    responseContext: responseContext
+    playabilityStatus: playabilityStatus
+    videoDetails: Optional[videoDetails] = None
+    streamData: Optional[streamingData] = None
+
     def __init__(self, player_response: dict):
         self.responseContext = responseContext(player_response.get('responseContext'))
         self.playabilityStatus = playabilityStatus(player_response.get('playabilityStatus'))
         if player_response.get('videoDetails'):
-            self.videoDetails = videoDetails(player_response.get('videoDetails'))
+            self.videoDetails = videoDetails(player_response.get('videoDetails'), player_response.get('microformat'))
         if player_response.get('streamingData'):
             self.streamData = streamingData(player_response.get('streamingData'))
 
     def check_status(self):
-        status, reason = self.playabilityStatus.status, self.playabilityStatus.reason
+        status, reason, subreason = self.playabilityStatus.status, self.playabilityStatus.reason, self.playabilityStatus.subreason
         if status == 'UNPLAYABLE':
             if reason == (
                     'Join this channel to get access to members-only content '
@@ -138,10 +195,15 @@ class playerResponse:
             elif reason == 'This live stream recording is not available.':
                 raise RecordingUnavailable
             else:
-                # if reason == 'Video unavailable':
-                #     if extract.is_region_blocked(self.watch_html):
-                #         raise VideoRegionBlocked(video_id=self.video_id)
+                if reason == 'Video unavailable':
+                    if subreason == 'The uploader has not made this video available in your country.':
+                        raise VideoRegionBlocked
+                elif reason == 'This video requires payment to watch.':
+                    raise PaymentRequired
                 raise VideoUnavailable
+        elif status == "ERROR":
+            if subreason == "This video is private.":
+                raise VideoPrivate
         elif status == 'LOGIN_REQUIRED':
             if reason == (
                     'This is a private video. '
@@ -150,19 +212,24 @@ class playerResponse:
                 raise VideoPrivate
             raise VideoUnavailable
         elif status == 'LIVE_STREAM_OFFLINE':
-            if 'monent' not in reason and not self.playabilityStatus.scheduled_start_time:
+            if 'moment' not in reason and not self.playabilityStatus.scheduled_start_time:
                 raise LiveStreamOffline
+        elif status != "OK":
+            raise VideoUnavailable
 
     def update(self, update_items: dict):
         if update_items.get('playabilityStatus'):
-            new = playabilityStatus(update_items.get('playabilityStatus'))
+            new = playabilityStatus(update_items['playabilityStatus'])
             self.playabilityStatus.__dict__.update(new.__dict__)
         if update_items.get('responseContext'):
-            new = responseContext(update_items.get('responseContext'))
+            new = responseContext(update_items['responseContext'])
             self.responseContext.__dict__.update(new.__dict__)
         if update_items.get('streamingData'):
-            new = streamingData(update_items.get('streamingData'))
-            try:
+            new = streamingData(update_items['streamingData'])
+            if self.streamData:
                 self.streamData.__dict__.update(new.__dict__)
-            except AttributeError:
+            else:
                 self.streamData = new
+        if update_items.get("microformat"):
+            new = videoDetails(None, update_items['microformat'])
+            self.videoDetails.__dict__.update(new.__dict__)

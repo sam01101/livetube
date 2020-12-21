@@ -52,6 +52,8 @@ class LiveStreamOffline(ExtractError):
 class VideoUnavailable(LivetubeError):
     """Video is unavailable."""
 
+class PaymentRequired(LivetubeError):
+    """Video needs to pay before able to watch."""
 
 class VideoPrivate(ExtractError):
     pass
