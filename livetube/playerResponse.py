@@ -139,7 +139,6 @@ class videoDetails:
             self.video_id = data.get('videoId', "")
             self.channel_id = data.get('channelId', "")
             self.channel_name = data.get('author', "Unknown")
-            self.isLive = data.get('isLive', False)
             self.keywords = data.get('keywords', [])
             self.shortDescription = data.get('shortDescription', "")
             self.isLiveDvrEnabled = data.get('isLiveDvrEnabled', False)
@@ -155,6 +154,7 @@ class videoDetails:
                 "ULTRALOW": "超低延迟(~1-3s) [不支持字幕, 1440p 和 4K]"
             }
             self.latencyText = types.get(self.latencyClass.value, "无法显示")
+        self.isLive = extra_data['playerMicroformatRenderer']['liveBroadcastDetails']['isLiveNow'] if extra_data['playerMicroformatRenderer'].get("liveBroadcastDetails") else data.get('isLive', False)
         self.title = extra_data['playerMicroformatRenderer']['title']['simpleText'] if extra_data else data['title']
         self.lengthSeconds = int(
             (extra_data['playerMicroformatRenderer'] if extra_data else data).get("lengthSeconds", 0))
