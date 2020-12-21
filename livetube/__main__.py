@@ -180,8 +180,8 @@ class Youtube:
                                 info['viewCount']['simpleText']
                             self.player_response.videoDetails.liveViewCount = \
                                 int(''.join(filter(str.isdigit, text)))
-                        if info.get("isLive"):
-                            self.player_response.videoDetails.isLive = info['isLive']
+                        # if info.get("isLive"):
+                        #     self.player_response.videoDetails.isLive = info['isLive']
                         if info.get("extraShortViewCount"):
                             self.player_response.videoDetails.liveShortViewCount = info['extraShortViewCount'][
                                 'simpleText']

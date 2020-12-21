@@ -44,6 +44,7 @@ class playabilityStatus:
     def __init__(self, data: dict):
         self.status = data.get("status", "UNPLAYABLE")
         self.reason = data.get("reason", "")
+        self.subreason = ""
         if errorScreen := data.get("errorScreen"):
             if errorScreen.get('playerLegacyDesktopYpcTrailerRenderer'):
                 pass  # Not parsing the free trailer
@@ -221,6 +222,11 @@ class playerResponse:
     def update(self, update_items: dict):
         if update_items.get('playabilityStatus'):
             new = playabilityStatus(update_items['playabilityStatus'])
+            if self.videoDetails:
+                if new.status == "OK" and new.reason == "":
+                    self.videoDetails.isLive = True
+                elif new.status == 'LIVE_STREAM_OFFLINE':
+                    self.videoDetails.isLive = False
             self.playabilityStatus.__dict__.update(new.__dict__)
         if update_items.get('responseContext'):
             new = responseContext(update_items['responseContext'])
