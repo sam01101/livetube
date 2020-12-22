@@ -154,7 +154,7 @@ class Youtube:
             if updateViewershipAction := action.get("updateViewershipAction"):
                 """1,901 watching now"""
                 # Btw isLive is inside
-                data: dict = updateViewershipAction['viewCount']
+                data: dict = updateViewershipAction.get("viewCount")
                 if data:
                     """    ==Structure==
                         viewCount {
