@@ -287,9 +287,9 @@ class Youtube:
                             for badge in badges: # type: dict
                                 if metadataBadgeRenderer := badge.get('metadataBadgeRenderer'):
                                     video_type = metadataBadgeRenderer['label']
-                                    if video_type == "Members only":
+                                    if video_type == "Members only" or video_type == '会员专享':
                                         self.video_type = "Member"
-                                    elif video_type == "Unlisted":
+                                    elif video_type == "Unlisted" or video_type == '不公开列出':
                                         self.video_type = "Unlisted"
                                     break
 
