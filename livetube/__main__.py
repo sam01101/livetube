@@ -67,12 +67,9 @@ class Youtube:
         if not cookie.get("SAPISID"):
             print("SAPISID not found, please check your cookie.")
             exit(1)
-        # Fuck cookie jar, i'm out.
         self.cookie = cookie
         self.cookie_jar = aiohttp.CookieJar(unsafe=True, quote_cookie=False)
         self.cookie_jar.update_cookies(self.cookie)
-        # self.cookie_header = {"Cookie": " ".join([f"{name}={value};" for name, value in cookie.items()])}
-        # self.header.update(self.cookie_header)
         self.http: Optional[aiohttp.ClientSession] = None
 
         # Raw of video info
@@ -81,6 +78,7 @@ class Youtube:
         self.vid_info: Optional[dict] = None
         self.player_config_args: Optional[dict] = None
         self.player_response: Optional[playerResponse] = None
+        self.video_type: Optional[str] = None
 
         #  API used to fetch metadata
         self.api_ver: str = "v1"
@@ -278,6 +276,23 @@ class Youtube:
         self.player_config_args = self.vid_info
         self.player_response: playerResponse = playerResponse(json.loads(self.vid_info['player_response']))
 
+    def check_video_type(self):
+        if self.initial_data:
+            contents = self.initial_data.get('contents', {}).get('twoColumnWatchNextResults', {})\
+            .get('results',{}).get('results',{}).get('contents')
+            if contents:
+                for content in contents: # type: dict
+                    if videoPrimaryInfoRenderer := content.get('videoPrimaryInfoRenderer'): # type: dict
+                        if badges := videoPrimaryInfoRenderer.get('badges'):
+                            for badge in badges: # type: dict
+                                if metadataBadgeRenderer := badge.get('metadataBadgeRenderer'):
+                                    video_type = metadataBadgeRenderer['label']
+                                    if video_type == "Members only":
+                                        self.video_type = "Member"
+                                    elif video_type == "Unlisted":
+                                        self.video_type = "Unlisted"
+                                    break
+
     def calculate_SNAPPISH(self):
         """
         Calculate SAPISIDHASH and return header
@@ -305,6 +320,7 @@ class Youtube:
         )
         self.js_url = js_url(self.watch_html)
         self.initial_data = initial_data(self.watch_html)
+        self.check_video_type()
         await self.fetch_video_info()
         """Fetch metadata and player for first time"""
         self.metadata_endpoint = f"https://www.youtube.com/youtubei/{self.api_ver}/updated_metadata?key={self.api_key}"
