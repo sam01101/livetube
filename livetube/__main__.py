@@ -349,7 +349,7 @@ class Community:
         self.channel_id = channel_id
         self.community_html: Optional[str] = None
         self.post_url: Optional[str] = None
-        self.posts: Optional[list] = None
+        self.posts: list = []
 
         # Header
         self.header = {
