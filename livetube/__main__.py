@@ -10,7 +10,8 @@ import json
 from hashlib import sha1
 from time import time
 from typing import Optional, Dict, Union
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, quote
+from base64 import b64encode
 
 import aiohttp
 import yarl
@@ -20,6 +21,15 @@ from .util.excpetions import RegexMatchError
 from .util.js import js_url, initial_data, video_info_url
 from .util.regex import regex_search
 
+
+def get_text(item: dict) -> str:
+    # exection = runs
+    if item.get("simpleText"):
+        return item.get("simpleText")
+    ret = ""
+    for cmd in item['runs']:
+        ret += cmd['text']
+    return ret
 
 # noinspection PyDefaultArgument
 class Youtube:
@@ -140,7 +150,7 @@ class Youtube:
         }
         return json.dumps(body)
 
-    def get_exec_text(self, text: list) -> str:
+    def concat_run_text(self, text: list) -> str:
         # exection = runs
         ret = ""
         for cmd in text:
@@ -174,7 +184,7 @@ class Youtube:
                     """
                     if info := data.get("videoViewCountRenderer"):
                         if info.get("viewCount"):
-                            text = self.get_exec_text(info['viewCount']['runs']) if info['viewCount'].get("runs") else \
+                            text = self.concat_run_text(info['viewCount']['runs']) if info['viewCount'].get("runs") else \
                                 info['viewCount']['simpleText']
                             self.player_response.videoDetails.liveViewCount = \
                                 int(''.join(filter(str.isdigit, text)))
@@ -278,13 +288,13 @@ class Youtube:
 
     def check_video_type(self):
         if self.initial_data:
-            contents = self.initial_data.get('contents', {}).get('twoColumnWatchNextResults', {})\
-            .get('results',{}).get('results',{}).get('contents')
+            contents = self.initial_data.get('contents', {}).get('twoColumnWatchNextResults', {}) \
+                .get('results', {}).get('results', {}).get('contents')
             if contents:
-                for content in contents: # type: dict
-                    if videoPrimaryInfoRenderer := content.get('videoPrimaryInfoRenderer'): # type: dict
+                for content in contents:  # type: dict
+                    if videoPrimaryInfoRenderer := content.get('videoPrimaryInfoRenderer'):  # type: dict
                         if badges := videoPrimaryInfoRenderer.get('badges'):
-                            for badge in badges: # type: dict
+                            for badge in badges:  # type: dict
                                 if metadataBadgeRenderer := badge.get('metadataBadgeRenderer'):
                                     video_type = metadataBadgeRenderer['label']
                                     if video_type == "Members only" or video_type == '会员专享':
@@ -328,3 +338,138 @@ class Youtube:
         self.player_endpoint = f"https://www.youtube.com/youtubei/{self.api_ver}/player?key={self.api_key}"
         await self.fetch_heartbeat()
         await self.fetch_metadata()
+
+
+class Community:
+    def __init__(self,
+                 channel_id: str,
+                 cookie: dict,
+                 header: Optional[Dict[str, Union[str, bool, int]]] = None):
+
+        self.channel_id = channel_id
+        self.community_html: Optional[str] = None
+        self.post_url: Optional[str] = None
+        self.posts: Optional[list] = None
+
+        # Header
+        self.header = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)"
+                          " Chrome/87.0.4280.88 Safari/537.36",
+            "X-Origin": "https://www.youtube.com"
+        }
+        if header:
+            self.header.update(header)
+
+        # Client setup
+        # Checking SAPISID from cookie
+        if not cookie.get("SAPISID"):
+            print("SAPISID not found, please check your cookie.")
+            exit(1)
+        self.cookie = cookie
+        self.cookie_jar = aiohttp.CookieJar(unsafe=True, quote_cookie=False)
+        self.cookie_jar.update_cookies(self.cookie)
+        self.http: Optional[aiohttp.ClientSession] = None
+
+        # Url setup
+        self.community_root_url = f"https://www.youtube.com/channel/{self.channel_id}/community"
+
+        # API setup
+        self.api_key: Optional[str] = None
+
+    def calculate_SNAPPISH(self) -> dict:
+        """
+        Calculate SAPISIDHASH and return header
+        Source: https://stackoverflow.com/questions/16907352/reverse-engineering-javascript-behind-google-button
+        Algorithm: SHA1(Timestamp + " " + SAPISID + " " + Origin)
+        Header: Authorization: SAPISIDHASH timestamp_<SAPISIDHASH>
+        """
+        timestamp = str(int(time()))
+        SAPISID = self.cookie['SAPISID']
+        Origin = self.header['X-Origin']
+        raw = " ".join([timestamp, SAPISID, Origin])
+        _hash = sha1(bytes(raw, encoding="utf8")).hexdigest()
+        return {"Authorization": f"SAPISIDHASH {timestamp}_{_hash}"}
+
+    def create_body(self) -> str:
+        """Create a body use to fetch the API"""
+        body = {
+            "context": {
+                "client": {
+                    "hl": "en_US",
+                    "isInternal": True,
+                    "clientName": "WEB",
+                    "clientVersion": "2.19700101.00.00"
+                }
+            },
+            "browseId": self.channel_id,
+            "params": quote(b64encode(b"\x12\tcommunity"))
+        }
+        return json.dumps(body)
+
+    async def parse_posts(self, raw: dict) -> dict:
+        tabs = raw.get("contents", {}).get('twoColumnBrowseResultsRenderer', {}).get("tabs")
+        raw_datas: list = []
+        if tabs:
+            for tab in tabs: # type: dict
+                if tab['tabRenderer'].get("title") == "Community":
+                    if tab['tabRenderer']['selected']:
+                        contents: dict = tab['tabRenderer']['content']['sectionListRenderer']['contents'][0]['itemSectionRenderer']['contents']
+                        for content in contents:
+                            data: dict = content['backstagePostThreadRenderer']['post']['backstagePostRenderer']
+                            raw_data = {
+                                "id": data['postId'],
+                                "author": {
+                                    "name": get_text(data['authorText'])
+                                },
+                                "text": get_text(data['contentText']) if data.get("contentText") else None,
+                                "type": "public"
+                            }
+                            if data.get("sponsorsOnlyBadge"):
+                                raw_data['type'] = "member"
+                            if backstageAttachment := data.get('backstageAttachment'):  # type: dict
+                                if videoRenderer := backstageAttachment.get('videoRenderer'):  # type: dict
+                                    thumbnails = videoRenderer['thumbnail']['thumbnails']
+                                    raw_data['video'] = {
+                                        "video_id": videoRenderer.get('videoId'),
+                                        'thumbnail': thumbnails[len(thumbnails)-1]['url'],
+                                        "title": get_text(videoRenderer['title'])
+                                    }
+                                if backstageImageRenderer := backstageAttachment.get('backstageImageRenderer'):  # type: dict
+                                    thumbnails = backstageImageRenderer['image']['thumbnails']
+                                    raw_data['image'] = thumbnails[len(thumbnails)-1]['url']
+                                if pollRenderer := backstageAttachment.get('pollRenderer'):  # type: dict
+                                    raw_data['votes'] = []
+                                    for choice in pollRenderer['choices']:
+                                        raw_data['votes'].append(f"⭕ {get_text(choice['text'])}")
+                            raw_datas.append(raw_data)
+                        break
+                    else:
+                        print("Unexpected: Didn't select community selection")
+            self.posts = raw_datas
+
+    async def fetch_post(self):
+        post_response: Optional[dict] = None
+        async with self.http.post(self.post_url,
+                                  headers=self.calculate_SNAPPISH(),
+                                  data=self.create_body()) as response:
+            if response.status != 200:
+                print(f"Invaild response status code (Code {response.status})")
+                print(await response.text())
+                breakpoint()
+            try:
+                post_response = await response.json()
+            except json.JSONDecodeError:
+                print(f"Malformated post response", post_response)
+        if not post_response:
+            print("Cannot get post resposne")
+        return await self.parse_posts(post_response)
+
+    async def fetch(self):
+        if self.http is None:
+            self.http = aiohttp.ClientSession(headers=self.header, cookie_jar=self.cookie_jar)
+        async with self.http.get(self.community_root_url,
+                                 headers=self.calculate_SNAPPISH()) as response:
+            self.community_html = await response.text()
+        self.api_key = regex_search(r"\"INNERTUBE_API_KEY\":\"([A-Za-z0-9_\-]+)\",", self.community_html, 1)
+        self.post_url = f"https://www.youtube.com/youtubei/v1/browse?key={self.api_key}"
+        await self.fetch_post()
