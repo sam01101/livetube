@@ -411,7 +411,7 @@ class Community:
         raw_datas: list = []
         if tabs:
             for tab in tabs: # type: dict
-                if tab['tabRenderer'].get("title") == "Community":
+                if tab.get("tabRenderer", {}).get("title") == "Community":
                     if tab['tabRenderer']['selected']:
                         contents: dict = tab['tabRenderer']['content']['sectionListRenderer']['contents'][0]['itemSectionRenderer']['contents']
                         for content in contents:
