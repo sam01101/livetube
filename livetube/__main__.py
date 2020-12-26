@@ -406,7 +406,7 @@ class Community:
         }
         return json.dumps(body)
 
-    async def parse_posts(self, raw: dict) -> dict:
+    async def parse_posts(self, raw: dict) -> bool:
         tabs = raw.get("contents", {}).get('twoColumnBrowseResultsRenderer', {}).get("tabs")
         raw_datas: list = []
         if tabs:
@@ -445,9 +445,11 @@ class Community:
                         break
                     else:
                         print("Unexpected: Didn't select community selection")
+                        return False
             self.posts = raw_datas
+            return True
 
-    async def fetch_post(self):
+    async def fetch_post(self) -> bool:
         post_response: Optional[dict] = None
         async with self.http.post(self.post_url,
                                   headers=self.calculate_SNAPPISH(),
@@ -455,13 +457,15 @@ class Community:
             if response.status != 200:
                 print(f"Invaild response status code (Code {response.status})")
                 print(await response.text())
-                breakpoint()
+                return False
             try:
                 post_response = await response.json()
             except json.JSONDecodeError:
                 print(f"Malformated post response", post_response)
+                return False
         if not post_response:
             print("Cannot get post resposne")
+            return False
         return await self.parse_posts(post_response)
 
     async def fetch(self):
@@ -472,4 +476,3 @@ class Community:
             self.community_html = await response.text()
         self.api_key = regex_search(r"\"INNERTUBE_API_KEY\":\"([A-Za-z0-9_\-]+)\",", self.community_html, 1)
         self.post_url = f"https://www.youtube.com/youtubei/v1/browse?key={self.api_key}"
-        await self.fetch_post()
