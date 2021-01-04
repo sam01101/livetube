@@ -7,19 +7,22 @@
 """
 import asyncio
 import json
+from base64 import b64encode, b64decode
 from hashlib import sha1
 from time import time
 from typing import Optional, Dict, Union
-from urllib.parse import parse_qsl, quote
-from base64 import b64encode
+from urllib.parse import parse_qsl, quote, unquote
 
 import aiohttp
 import yarl
 
 from .playerResponse import playerResponse
 from .util.excpetions import RegexMatchError
-from .util.js import js_url, initial_data, video_info_url
+from .util.js import js_url, initial_data, video_info_url, query_selector
 from .util.regex import regex_search
+
+memberships_root_url = "https://www.youtube.com/paid_memberships?pbj=1"
+mainpage_html = "https://www.youtube.com"
 
 
 def get_text(item: dict) -> str:
@@ -30,6 +33,14 @@ def get_text(item: dict) -> str:
     for cmd in item['runs']:
         ret += cmd['text']
     return ret
+
+
+def string_escape(s, encoding='utf-8'):
+    return (s.encode('latin1')  # To bytes, required by 'unicode-escape'
+            .decode('unicode-escape')  # Perform the actual octal-escaping decode
+            .encode('latin1')  # 1:1 mapping back to bytes
+            .decode(encoding))  # Decode original encoding
+
 
 # noinspection PyDefaultArgument
 class Youtube:
@@ -348,7 +359,7 @@ class Community:
 
         self.channel_id = channel_id
         self.community_html: Optional[str] = None
-        self.post_url: Optional[str] = None
+        self.post_url: Optional[str] = "https://www.youtube.com/youtubei/v1/browse?key="
         self.posts: list = []
 
         # Header
@@ -410,10 +421,12 @@ class Community:
         tabs = raw.get("contents", {}).get('twoColumnBrowseResultsRenderer', {}).get("tabs")
         raw_datas: list = []
         if tabs:
-            for tab in tabs: # type: dict
+            for tab in tabs:  # type: dict
                 if tab.get("tabRenderer", {}).get("title") == "Community":
                     if tab['tabRenderer']['selected']:
-                        contents: dict = tab['tabRenderer']['content']['sectionListRenderer']['contents'][0]['itemSectionRenderer']['contents']
+                        contents: dict = \
+                            tab['tabRenderer']['content']['sectionListRenderer']['contents'][0]['itemSectionRenderer'][
+                                'contents']
                         for content in contents:
                             data: dict = content['backstagePostThreadRenderer']['post']['backstagePostRenderer']
                             raw_data = {
@@ -431,12 +444,13 @@ class Community:
                                     thumbnails = videoRenderer['thumbnail']['thumbnails']
                                     raw_data['video'] = {
                                         "video_id": videoRenderer.get('videoId'),
-                                        'thumbnail': thumbnails[len(thumbnails)-1]['url'],
+                                        'thumbnail': thumbnails[len(thumbnails) - 1]['url'],
                                         "title": get_text(videoRenderer['title'])
                                     }
-                                if backstageImageRenderer := backstageAttachment.get('backstageImageRenderer'):  # type: dict
+                                if backstageImageRenderer := backstageAttachment.get(
+                                        'backstageImageRenderer'):  # type: dict
                                     thumbnails = backstageImageRenderer['image']['thumbnails']
-                                    raw_data['image'] = thumbnails[len(thumbnails)-1]['url']
+                                    raw_data['image'] = thumbnails[len(thumbnails) - 1]['url']
                                 if pollRenderer := backstageAttachment.get('pollRenderer'):  # type: dict
                                     raw_data['votes'] = []
                                     for choice in pollRenderer['choices']:
@@ -475,4 +489,145 @@ class Community:
                                  headers=self.calculate_SNAPPISH()) as response:
             self.community_html = await response.text()
         self.api_key = regex_search(r"\"INNERTUBE_API_KEY\":\"([A-Za-z0-9_\-]+)\",", self.community_html, 1)
-        self.post_url = f"https://www.youtube.com/youtubei/v1/browse?key={self.api_key}"
+        self.post_url += self.api_key
+
+
+class Membership:
+    def __init__(self,
+                 cookie: dict,
+                 header: Optional[Dict[str, Union[str, bool, int]]] = None):
+
+        self.membership_status_url = "https://www.youtube.com/youtubei/v1/browse?key="
+        self.memberships_json: Optional[dict] = None
+        self.memberships: list = []
+
+        # json pattern
+        self.membership_pattern = "?/response/contents/twoColumnBrowseResultsRenderer/tabs/" \
+                                  "?/tabRenderer/content/sectionListRenderer/contents/" \
+                                  "?/itemSectionRenderer/contents/" \
+                                  "?/cardItemContainerRenderer/baseRenderer/cardItemRenderer/" \
+                                  "headingRenderer/cardItemTextWithImageRenderer/" \
+                                  "textCollectionRenderer/0/cardItemTextCollectionRenderer"
+        self.continuation_pattern = "?/response/contents/twoColumnBrowseResultsRenderer/tabs/" \
+                                    "?/tabRenderer/content/sectionListRenderer/contents/" \
+                                    "?/itemSectionRenderer/contents/" \
+                                    "?/cardItemContainerRenderer/onClickCommand" \
+                                    "/continuationCommand/token"
+        self.channel_id_pattern = "onResponseReceivedActions/?/appendContinuationItemsAction/continuationItems/" \
+                                  "?/itemSectionRenderer/contents/" \
+                                  "?/cardItemRenderer/" \
+                                  "additionalInfoRenderer/cardItemActionsRenderer/" \
+                                  "primaryButtonRenderer/buttonRenderer"
+
+        # Header
+        self.header = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)"
+                          " Chrome/87.0.4280.88 Safari/537.36",
+            "X-Origin": "https://www.youtube.com"
+        }
+        if header:
+            self.header.update(header)
+
+        # Client setup
+        if not cookie.get("SAPISID"):
+            print("SAPISID not found, please check your cookie.")
+            exit(1)
+        self.cookie = cookie
+        self.cookie_jar = aiohttp.CookieJar(unsafe=True, quote_cookie=False)
+        self.cookie_jar.update_cookies(self.cookie)
+        self.http: Optional[aiohttp.ClientSession] = None
+
+        # API setup
+        self.api_key: Optional[str] = None
+        self.__ID_TOKEN__: Optional[str] = None
+
+    def calculate_SNAPPISH(self) -> dict:
+        """
+        Calculate SAPISIDHASH and return header
+        Source: https://stackoverflow.com/questions/16907352/reverse-engineering-javascript-behind-google-button
+        Algorithm: SHA1(Timestamp + " " + SAPISID + " " + Origin)
+        Header: Authorization: SAPISIDHASH timestamp_<SAPISIDHASH>
+        """
+        timestamp = str(int(time()))
+        SAPISID = self.cookie['SAPISID']
+        Origin = self.header['X-Origin']
+        raw = " ".join([timestamp, SAPISID, Origin])
+        _hash = sha1(bytes(raw, encoding="utf8")).hexdigest()
+        return {"Authorization": f"SAPISIDHASH {timestamp}_{_hash}"}
+
+    def create_query_body(self, continuation_key: str) -> str:
+        return json.dumps({
+            "context": {
+                "client": {
+                    "hl": "en",
+                    "gl": "en",
+                    "isInternal": True,
+                    "clientName": "WEB",
+                    "clientVersion": "2.20201220.08.00"
+                }
+            },
+            "continuation": continuation_key
+        })
+
+    async def parse_membership_info(self, memberships_raw: list, key_raw: list) -> list:
+        for data in key_raw.copy():  # type: int, str
+            b64_orig = unquote(data).encode('ascii')
+            b64_dec_byte = b64decode(b64_orig)
+            if b64_dec_byte.find(b"memberships_and_purchases") != -1:
+                key_raw.remove(data)
+                break
+
+        async def _fetch_status(steps: int, data: dict) -> dict:
+            data: list = data["textRenderers"]
+            vtuber_name = get_text(data[0]["cardItemTextRenderer"]['text'])
+            perk_status = get_text(data[1]["cardItemTextRenderer"]['text'])
+            info = {
+                "name": vtuber_name,
+                "status": perk_status
+            }
+            async with self.http.post(self.membership_status_url, headers=self.calculate_SNAPPISH(),
+                                      data=self.create_query_body(key_raw[steps])) as response:
+                membership_status = await response.json()
+                status_raw = query_selector(membership_status, self.channel_id_pattern)
+                for status in status_raw:
+                    test_status = get_text(status['text'])
+                    if test_status == "See Perks":  # type: dict
+                        navigationEndpoint = status.get("navigationEndpoint")
+                        info['expired'] = False
+                        info['channel_id']: str = navigationEndpoint['browseEndpoint']['browseId']
+                    elif test_status == "Renew":  # type: dict
+                        serviceEndpoint = status.get("serviceEndpoint")
+                        info['expired'] = True
+                        channel_id_raw = b64decode(
+                            unquote(serviceEndpoint['ypcGetOffersEndpoint']['params']).encode('ascii'))
+                        info['channel_id']: str = channel_id_raw \
+                            .replace(b"\n\x1c\x08\x03\x12\x18", b"") \
+                            .replace(b"\x18\x032\x15R\x13FEmembership_detail", b"") \
+                            .decode("utf8")
+                    if test_status == "See Perks" or test_status == "Renew":
+                        break
+            return info
+
+        return await asyncio.gather(*(_fetch_status(steps, data) for steps, data in enumerate(memberships_raw)))
+
+    async def fetch(self):
+        if not self.http:
+            self.http = aiohttp.ClientSession(headers=self.header, cookie_jar=self.cookie_jar)
+        if not self.api_key:
+            async with self.http.get(mainpage_html) as response:
+                mainpage_url = await response.text()
+                self.api_key = regex_search(r"\"INNERTUBE_API_KEY\":\"([A-Za-z0-9_\-]+)\",", mainpage_url, 1)
+                self.__ID_TOKEN__ = string_escape(
+                    regex_search(r"\"ID_TOKEN\":\"([A-Za-z0-9_\\\-=\/\+]+)\",", mainpage_url, 1))
+                self.header.update({
+                    "X-YouTube-Client-Name": "1",
+                    "X-YouTube-Client-Version": "2.20770101.08.00",
+                    "X-Youtube-Identity-Token": self.__ID_TOKEN__
+                })
+                self.membership_status_url += self.api_key
+
+        async with self.http.get(memberships_root_url, headers=self.header) as response:
+            self.memberships_json = await response.json()
+        memberships_raw = query_selector(self.memberships_json, self.membership_pattern)
+        key_raw = query_selector(self.memberships_json, self.continuation_pattern)
+        self.memberships = await self.parse_membership_info(memberships_raw, key_raw)

@@ -6,6 +6,7 @@
     文件描述: 
 """
 from collections import OrderedDict
+from typing import Union, Optional
 from urllib.parse import quote, urlencode
 
 from .excpetions import RegexMatchError, HTMLParseError
@@ -72,3 +73,59 @@ def video_info_url(video_id: str, watch_url: str) -> str:
         ]
     )
     return "https://youtube.com/get_video_info?" + urlencode(params)
+
+
+def query_selector(path_obj: Union[dict, list], pattern: Union[str, list], results=None) -> Union[
+    bool, Union[dict, list]]:
+    """
+    lightwight jq, see gist for why this function exists
+
+    see https://gist.github.com/sam01101/b35da7ffad74849c2d941429c74a2365
+
+
+    :param results: The total reuslt
+    :param path_obj: The path
+    :param pattern: The pattern of the path
+    :return: The result if the path is executed successfully or False
+    """
+    if results is None:
+        results = []
+    pattern_spilt: list = pattern.split("/") if isinstance(pattern, str) else pattern
+    """
+    About the pattern:
+    ? - Any number
+    """
+    try:
+        last_path: Optional[Union[dict, list]] = path_obj
+        test_path: Union[dict, list]
+        for level, path_name in enumerate(pattern_spilt):  # type: int, str
+            if path_name == "?":  # list, test for number
+                if not isinstance(last_path, list):
+                    return False
+                last_path: list
+                for test_num in range(len(last_path)):
+                    if result := query_selector(last_path[test_num], pattern_spilt[level + 1:], results):
+                        if id(results) == id(result):
+                            continue
+                        if isinstance(result, list):
+                            results.append(result[0])
+                        else:
+                            results.append(result)
+                if len(results) > 0:
+                    return results
+                return False
+            elif path_name.isnumeric():  # list, number
+                if not isinstance(last_path, list):
+                    return False
+                last_path = last_path[int(path_name)]
+            else:  # dict
+                if test_path := last_path.get(path_name):
+                    last_path = test_path
+                else:
+                    return False
+        if last_path:
+            return last_path
+        else:
+            return False
+    except (IndexError, KeyError):
+        return False
