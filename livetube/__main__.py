@@ -254,11 +254,11 @@ class Youtube:
             pattern = "contents/twoColumnWatchNextResults/results/results/contents/" \
                       "?/videoPrimaryInfoRenderer/badges/0/metadataBadgeRenderer/label"
 
-            if video_type := query_selector(self.initial_data, pattern):
-                video_type: str = video_type[0]
-                if video_type in ["Members only", '会员专享']:
+            if video_type := query_selector(self.initial_data, pattern):  # type: list
+                video_tag: str = video_type[0]
+                if video_tag in ["Members only", '会员专享']:
                     self.video_type = "Member"
-                elif video_type in ["Unlisted", '不公开列出']:
+                elif video_tag in ["Unlisted", '不公开列出']:
                     self.video_type = "Unlisted"
 
     def check_premiere(self):
