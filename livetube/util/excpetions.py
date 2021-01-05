@@ -22,6 +22,10 @@ class ExtractError(LivetubeError):
     """Data extraction based exception."""
 
 
+class NetworkError(LivetubeError):
+    """Network based exception."""
+
+
 class HTMLParseError(LivetubeError):
     """HTML could not be parsed"""
 
@@ -45,15 +49,17 @@ class LiveStreamError(ExtractError):
     """Video is a live stream."""
 
 
-class LiveStreamOffline(ExtractError):
+class LiveStreamOffline(LivetubeError):
     """Live stream offline."""
 
 
 class VideoUnavailable(LivetubeError):
     """Video is unavailable."""
 
+
 class PaymentRequired(LivetubeError):
     """Video needs to pay before able to watch."""
+
 
 class VideoPrivate(ExtractError):
     pass

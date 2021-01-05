@@ -11,23 +11,6 @@ from urllib.parse import quote, urlencode
 
 from .excpetions import RegexMatchError, HTMLParseError
 from .parser import parse_for_object
-from .player import get_ytplayer_js, get_ytplayer_config
-
-
-def js_url(html: str) -> str:
-    """Get the base JavaScript url.
-
-    Construct the base JavaScript url, which contains the decipher
-    "transforms".
-
-    :param str html:
-        The html contents of the watch page.
-    """
-    try:
-        base_js = get_ytplayer_config(html)['assets']['js']
-    except (KeyError, RegexMatchError):
-        base_js = get_ytplayer_js(html)
-    return "https://youtube.com" + base_js
 
 
 def initial_data(watch_html: str) -> dict:

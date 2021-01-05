@@ -10,6 +10,7 @@ from typing import Optional, Dict
 
 from .util.excpetions import MembersOnly, RecordingUnavailable, VideoUnavailable, LiveStreamOffline, VideoPrivate, \
     RegexMatchError, VideoRegionBlocked, PaymentRequired
+from .util.js import query_selector
 from .util.regex import regex_search
 
 
@@ -24,59 +25,78 @@ def extract_string(data: dict):
         return text
 
 
-class responseContext:
-    def __init__(self, data: dict):
-        self.serviceTrackingParams: list = data.get('serviceTrackingParams')
-        FEEDBACK: list = self.serviceTrackingParams[0]['params']
-        self.is_viewed_live: bool = FEEDBACK[0]['value']
-        self.logged_in: bool = FEEDBACK[1]['value']
+class latencyType(Enum):
+    MDE_STREAM_OPTIMIZATIONS_RENDERER_LATENCY_NORMAL = "NORMAL"
+    MDE_STREAM_OPTIMIZATIONS_RENDERER_LATENCY_LOW = "LOW"
+    MDE_STREAM_OPTIMIZATIONS_RENDERER_LATENCY_ULTRA_LOW = "ULTRALOW"
+    NORMAL = "NORMAL"
+    LOW = "LOW"
+    ULTRALOW = "ULTRALOW"
 
+
+class responseContext:
+    serviceTrackingParams: list
+    is_viewed_live: bool
+    logged_in: bool
+
+    def __init__(self, data: dict):
+        FEEDBACK: list
+        self.serviceTrackingParams = data.get('serviceTrackingParams')
+        if self.serviceTrackingParams:
+            FEEDBACK = self.serviceTrackingParams[0]['params']
+            self.is_viewed_live = FEEDBACK[0]['value']
+            self.logged_in = FEEDBACK[1]['value']
+
+
+# last_reason
 
 class playabilityStatus:
     status: str
     reason: str
-    last_reason: Optional[str] = None
-    subreason: Optional[str] = None
     playableInEmbed: bool
-    pollDelayMs: int
-    isCountDown: bool
+    subreason: Optional[str] = None
+    last_reason: Optional[str] = None
+    pollDelayMs: int = 5000
+    isCountDown = False
     scheduled_start_time: Optional[int] = None
 
     def __init__(self, data: dict):
         self.status = data.get("status", "UNPLAYABLE")
         self.reason = data.get("reason", "")
-        self.subreason = ""
-        if errorScreen := data.get("errorScreen"):
-            if errorScreen.get('playerLegacyDesktopYpcTrailerRenderer'):
-                pass  # Not parsing the free trailer
-            if subreason := errorScreen.get("playerErrorMessageRenderer", {}).get("subreason"):
-                self.subreason = extract_string(subreason)
         self.playableInEmbed = data.get('playableInEmbed', False)
-        if liveStreamability := data.get('liveStreamability'):
-            if liveStreamabilityRenderer := liveStreamability.get("liveStreamabilityRenderer"):
-                self.pollDelayMs = liveStreamabilityRenderer.get("pollDelayMs", 5000)
-                if offlineSlate := liveStreamabilityRenderer.get("offlineSlate"):
-                    self.isCountDown = offlineSlate['liveStreamOfflineSlateRenderer'].get("canShowCountdown", False)
-                    test = offlineSlate['liveStreamOfflineSlateRenderer'].get("scheduledStartTime")
-                    self.scheduled_start_time = int(test) if test else None
+        if subreason := query_selector(data, "errorScreen/playerErrorMessageRenderer/subreason"):
+            self.subreason = extract_string(subreason)
+        if poll_ms := query_selector(data, "liveStreamability/liveStreamabilityRenderer/pollDelayMs"):
+            self.pollDelayMs = int(poll_ms)
+        if livestream_offline := query_selector(data,
+                                                "liveStreamability/liveStreamabilityRenderer/offlineSlate/liveStreamOfflineSlateRenderer"):
+            self.isCountDown = livestream_offline.get("canShowCountdown", False)
+            if scheduled_start_time := livestream_offline.get("scheduledStartTime"):
+                self.scheduled_start_time = int(scheduled_start_time)
 
 
 class streamingData:
+    expiresInSeconds: int
+    hlsManifestUrl: str
+    dashManifestUrl: str
+    expireTimestamp: int
+    audios: Dict[str, dict]
+    videos: Dict[str, dict]
+
     def __init__(self, data: dict):
         if data.get('expiresInSeconds'):
-            self.expiresInSeconds: int = int(data.get('expiresInSeconds'))
-            self.hlsManifestUrl: str = data.get('hlsManifestUrl')
-            self.dashManifestUrl: str = data.get('dashManifestUrl')
+            self.expiresInSeconds = int(data.get('expiresInSeconds'))
+            self.hlsManifestUrl = data.get('hlsManifestUrl')
+            self.dashManifestUrl = data.get('dashManifestUrl')
             # Get timestamp of expire time
             if fmt_link := (self.hlsManifestUrl or self.dashManifestUrl):
-                # /expire/????????????/
                 try:
-                    self.expireTimestamp: int = int(regex_search(r"/expire/(\d+)/", fmt_link, 1))
+                    self.expireTimestamp = int(regex_search(r"/expire/(\d+)/", fmt_link, 1))
                 except RegexMatchError:
                     pass
             adaptiveFormats: list = data.get("adaptiveFormats", [])
-            self.audios: Dict[str, dict] = {}
-            self.videos: Dict[str, dict] = {}
+            self.audios = {}
+            self.videos = {}
             for formats in adaptiveFormats:
                 if "audio" in formats['mimeType']:
                     self.audios[formats['itag']] = formats
@@ -100,15 +120,6 @@ class streamingData:
                     best = formats
             if best:
                 self.videos['best'] = best
-
-
-class latencyType(Enum):
-    MDE_STREAM_OPTIMIZATIONS_RENDERER_LATENCY_NORMAL = "NORMAL"
-    MDE_STREAM_OPTIMIZATIONS_RENDERER_LATENCY_LOW = "LOW"
-    MDE_STREAM_OPTIMIZATIONS_RENDERER_LATENCY_ULTRA_LOW = "ULTRALOW"
-    NORMAL = "NORMAL"
-    LOW = "LOW"
-    ULTRALOW = "ULTRALOW"
 
 
 class videoDetails:
@@ -188,7 +199,7 @@ class playerResponse:
         if player_response.get('streamingData'):
             self.streamData = streamingData(player_response.get('streamingData'))
 
-    def check_status(self):
+    def raise_for_status(self):
         status, reason, subreason = self.playabilityStatus.status, self.playabilityStatus.reason, self.playabilityStatus.subreason
         if status == 'UNPLAYABLE':
             if reason == (
@@ -208,6 +219,7 @@ class playerResponse:
         elif status == "ERROR":
             if subreason == "This video is private.":
                 raise VideoPrivate
+            raise VideoUnavailable
         elif status == 'LOGIN_REQUIRED':
             if reason == (
                     'This is a private video. '

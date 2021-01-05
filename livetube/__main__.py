@@ -17,8 +17,8 @@ import aiohttp
 import yarl
 
 from .playerResponse import playerResponse
-from .util.excpetions import RegexMatchError
-from .util.js import js_url, initial_data, video_info_url, query_selector
+from .util.excpetions import RegexMatchError, NetworkError
+from .util.js import initial_data, video_info_url, query_selector
 from .util.regex import regex_search
 
 memberships_root_url = "https://www.youtube.com/paid_memberships?pbj=1"
@@ -35,7 +35,7 @@ def get_text(item: dict) -> str:
     return ret
 
 
-def string_escape(s, encoding='utf-8'):
+def string_escape(s, encoding='utf-8') -> str:
     return (s.encode('latin1')  # To bytes, required by 'unicode-escape'
             .decode('unicode-escape')  # Perform the actual octal-escaping decode
             .encode('latin1')  # 1:1 mapping back to bytes
@@ -59,10 +59,6 @@ class Youtube:
         # Pre fetch
         self.watch_html: Optional[str] = None
         self.age_restricted: Optional[bool] = None
-
-        # JavaScript
-        self.js: Optional[str] = None
-        self.js_url: Optional[str] = None
 
         # Getting video_id
         if video_id.startswith("http"):
@@ -104,7 +100,7 @@ class Youtube:
         #  API used to fetch metadata
         self.api_ver: str = "v1"
         self.api_key: Optional[str] = None
-        self.api_client_ver: str = "2.19970101.00.00"
+        self.api_client_ver: str = "2.20770101.00.00"
         self.api_client_name: str = "WEB"
         self.metadata_endpoint: str = "https://www.youtube.com/youtubei/v1/updated_metadata?key="
         # URL used to fetch heartbeat and player
@@ -116,7 +112,7 @@ class Youtube:
     def __del__(self):
         loop = asyncio.get_event_loop()
         if loop and not self.http.closed:
-            asyncio.ensure_future(self.http.close(), loop=loop)
+            asyncio.ensure_future(self.http.close, loop=loop)
 
     def create_metadata_body(self, force_video_id: bool = False) -> str:
         """
@@ -161,60 +157,21 @@ class Youtube:
         }
         return json.dumps(body)
 
-    def concat_run_text(self, text: list) -> str:
-        # exection = runs
-        ret = ""
-        for cmd in text:
-            ret += cmd['text']
-        return ret
-
     def update_actions(self, actions: list):
         for action in actions:  # type: dict
-            if updateViewershipAction := action.get("updateViewershipAction"):
-                """1,901 watching now"""
-                # Btw isLive is inside
-                data: dict = updateViewershipAction.get("viewCount")
-                if data:
-                    """    ==Structure==
-                        viewCount {
-                            videoViewCountRenderer {
-                                viewCount {
-                                    simpleText: str
-                                }
-                                isLive: bool
-                                extraShortViewCount {
-                                    accessibility {
-                                        accessibilityData {
-                                            label: str
-                                        }
-                                    }
-                                    simpleText: str
-                                }
-                            }
-                        }
-                    """
-                    if info := data.get("videoViewCountRenderer"):
-                        if info.get("viewCount"):
-                            text = self.concat_run_text(info['viewCount']['runs']) if info['viewCount'].get("runs") else \
-                                info['viewCount']['simpleText']
-                            self.player_response.videoDetails.liveViewCount = \
-                                int(''.join(filter(str.isdigit, text)))
-                        # if info.get("isLive"):
-                        #     self.player_response.videoDetails.isLive = info['isLive']
-                        if info.get("extraShortViewCount"):
-                            self.player_response.videoDetails.liveShortViewCount = info['extraShortViewCount'][
-                                'simpleText']
+            if info := query_selector(action, "updateViewershipAction/viewCount/videoViewCountRenderer"):
+                if viewCount := info.get("viewCount"):
+                    self.player_response.videoDetails.liveViewCount = \
+                        int(''.join(filter(str.isdigit, get_text(viewCount))))
+                if shortViewCount := info.get("extraShortViewCount"):
+                    self.player_response.videoDetails.liveShortViewCount = get_text(shortViewCount)
             elif updateToggleButtonTextAction := action.get("updateToggleButtonTextAction"):
                 """Like/Dislike button update"""
-                # Note that the real number won't update tho
-                if updateToggleButtonTextAction['buttonId'] == "TOGGLE_BUTTON_ID_TYPE_LIKE":
-                    self.player_response.videoDetails.shortLikeCount = updateToggleButtonTextAction['defaultText'][
-                        'simpleText']
-                elif updateToggleButtonTextAction['buttonId'] == "TOGGLE_BUTTON_ID_TYPE_DISLIKE":
-                    self.player_response.videoDetails.shortDislikeCount = updateToggleButtonTextAction['defaultText'][
-                        'simpleText']
+                buttonId = updateToggleButtonTextAction['buttonId']
+                button_type = "shortLikeCount" if buttonId == "TOGGLE_BUTTON_ID_TYPE_LIKE" else "shortDislikeCount"
+                setattr(self.player_response.videoDetails, button_type,
+                        get_text(updateToggleButtonTextAction['defaultText']))
             elif updateDateTextAction := action.get("updateDateTextAction"):
-                """Started streaming 6 hours ago"""
                 pattern = {
                     "seconds": "秒",
                     "minutes": "分钟",
@@ -222,74 +179,69 @@ class Youtube:
                     "days": "天",
                     "years": "年",
                 }
-                displayText = updateDateTextAction['dateText']['simpleText']
+                displayText = get_text(updateDateTextAction['dateText'])
                 for p, name in pattern.items():
                     try:
-                        time: int = int(regex_search(r"(\d+) " + p, displayText, 1))
-                        self.player_response.videoDetails.startedSince = f"{time} {name}前"
+                        stream_time = int(regex_search(r"(\d+) " + p, displayText, 1))
+                        self.player_response.videoDetails.startedSince = f"{stream_time} {name}前"
                         break
                     except RegexMatchError:
                         continue
             elif updateTitleAction := action.get("updateTitleAction"):
-                full_title = ""
-                title: dict = updateTitleAction['title']
-                if title.get("simpleText"):
-                    full_title = title.get("simpleText")
-                elif title.get("runs"):
-                    for segment in title.get("runs"):  # type: dict
-                        if segment != "":
-                            full_title += segment.get("text", "")
-                if self.player_response.videoDetails.title != full_title:
-                    self.player_response.videoDetails.title = full_title
+                title: str = get_text(updateTitleAction['title'])
+                if self.player_response.videoDetails.title != title:
+                    self.player_response.videoDetails.title = title
 
     async def fetch_metadata(self):
         async with self.http.post(self.metadata_endpoint, data=self.create_metadata_body(),
                                   headers=self.calculate_SNAPPISH()) as response:
-            if response.status != 200:
-                return
             try:
                 r: dict = await response.json()
+                if r.get("error"):
+                    raise NetworkError(f"{r['error']['code']} {r['error']['message']}")
                 if not self.continue_id:
-                    self.continue_id = r["continuation"]['timedContinuationData']['continuation']
-            except (json.JSONDecodeError, KeyError):
-                # print("Error: malformed JSON data", r)
-                return
+                    if continue_id := query_selector(r, "continuation/timedContinuationData/continuation"):
+                        self.continue_id = continue_id
+            except (json.JSONDecodeError, KeyError) as e:
+                raise NetworkError("Malformed JSON error") from e
             if actions := r.get("actions"):
                 self.update_actions(actions)
 
     async def fetch_heartbeat(self):
-        # Threat this like a dymanic update list object
+        # Threat this like a dynamic update list object
         async with self.http.post(self.heartbeat_endpoint, data=self.create_heartbeat_body(),
                                   headers=self.calculate_SNAPPISH()) as response:
-            if response.status != 200:
-                return
             try:
                 r: dict = await response.json()
-            except (json.JSONDecodeError, KeyError):
-                # print("Error: malformed JSON data", r)
-                return
+                if r.get("error"):
+                    raise NetworkError(f"{r['error']['code']} {r['error']['message']}")
+            except (json.JSONDecodeError, KeyError) as e:
+                raise NetworkError("Malformed JSON error") from e
             self.player_response.update(r)
 
     async def fetch_player(self):
         """Get the player"""
         async with self.http.post(self.player_endpoint, data=self.create_metadata_body(True),
                                   headers=self.calculate_SNAPPISH()) as response:
-            if response.status != 200:
-                return
             try:
                 r: dict = await response.json()
-            except (json.JSONDecodeError, KeyError):
-                # print("Error: malformed JSON data", r)
-                return
+                if r.get("error"):
+                    raise NetworkError(f"{r['error']['code']} {r['error']['message']}")
+            except (json.JSONDecodeError, KeyError) as e:
+                raise NetworkError("Malformed JSON error") from e
             self.player_response.update(r)
 
     async def fetch_video_info(self):
         async with self.http.get(yarl.URL(self.vid_info_url, encoded=True),
                                  headers=self.calculate_SNAPPISH()) as response:
+            if response.status != 200:
+                try:
+                    r: dict = await response.json()
+                    if r.get("error"):
+                        raise NetworkError(f"{r['error']['code']} {r['error']['message']}")
+                except json.JSONDecodeError:
+                    pass
             self.vid_info_raw = await response.text()
-        # async with self.http.get(self.js_url, headers=self.calculate_SNAPPISH()) as response:
-        #     self.js = await response.text()
-        #  Descramble the stream data and build Stream instances.
         self.vid_info = dict(parse_qsl(self.vid_info_raw))
         self.api_ver = self.vid_info['innertube_api_version']
         self.api_key = self.vid_info['innertube_api_key']
@@ -299,20 +251,14 @@ class Youtube:
 
     def check_video_type(self):
         if self.initial_data:
-            contents = self.initial_data.get('contents', {}).get('twoColumnWatchNextResults', {}) \
-                .get('results', {}).get('results', {}).get('contents')
-            if contents:
-                for content in contents:  # type: dict
-                    if videoPrimaryInfoRenderer := content.get('videoPrimaryInfoRenderer'):  # type: dict
-                        if badges := videoPrimaryInfoRenderer.get('badges'):
-                            for badge in badges:  # type: dict
-                                if metadataBadgeRenderer := badge.get('metadataBadgeRenderer'):
-                                    video_type = metadataBadgeRenderer['label']
-                                    if video_type == "Members only" or video_type == '会员专享':
-                                        self.video_type = "Member"
-                                    elif video_type == "Unlisted" or video_type == '不公开列出':
-                                        self.video_type = "Unlisted"
-                                    break
+            pattern = "contents/twoColumnWatchNextResults/results/results/contents/" \
+                      "?/videoPrimaryInfoRenderer/badges/0/metadataBadgeRenderer/label"
+            if video_type := query_selector(self.initial_data, pattern):
+                video_type = video_type[0]
+                if video_type in ["Members only", '会员专享']:
+                    self.video_type = "Member"
+                elif video_type in ["Unlisted", '不公开列出']:
+                    self.video_type = "Unlisted"
 
     def calculate_SNAPPISH(self):
         """
@@ -335,11 +281,17 @@ class Youtube:
         if self.http is None:
             self.http = aiohttp.ClientSession(headers=self.header, cookie_jar=self.cookie_jar)
         async with self.http.get(self.watch_url, headers=self.header) as response:
+            if response.status != 200:
+                try:
+                    r: dict = await response.json()
+                    if r.get("error"):
+                        raise NetworkError(f"{r['error']['code']} {r['error']['message']}")
+                except json.JSONDecodeError:
+                    pass
             self.watch_html = await response.text()
         self.vid_info_url = video_info_url(
             self.video_id, self.watch_url
         )
-        self.js_url = js_url(self.watch_html)
         self.initial_data = initial_data(self.watch_html)
         self.check_video_type()
         await self.fetch_video_info()
@@ -418,17 +370,14 @@ class Community:
         return json.dumps(body)
 
     async def parse_posts(self, raw: dict) -> bool:
-        tabs = raw.get("contents", {}).get('twoColumnBrowseResultsRenderer', {}).get("tabs")
         raw_datas: list = []
-        if tabs:
+        if tabs := query_selector(raw, "contents/twoColumnBrowseResultsRenderer/tabs"):
             for tab in tabs:  # type: dict
-                if tab.get("tabRenderer", {}).get("title") == "Community":
-                    if tab['tabRenderer']['selected']:
-                        contents: dict = \
-                            tab['tabRenderer']['content']['sectionListRenderer']['contents'][0]['itemSectionRenderer'][
-                                'contents']
+                if query_selector(tab, "tabRenderer/title") == "Community":
+                    if query_selector(tab, "tabRenderer/selected"):
+                        contents: dict = query_selector(tab, "tabRenderer/content/sectionListRenderer/contents/0/itemSectionRenderer/contents")
                         for content in contents:
-                            data: dict = content['backstagePostThreadRenderer']['post']['backstagePostRenderer']
+                            data: dict = query_selector(content, "backstagePostThreadRenderer/post/backstagePostRenderer")
                             raw_data = {
                                 "id": data['postId'],
                                 "author": {
