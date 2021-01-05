@@ -96,6 +96,7 @@ class Youtube:
         self.player_config_args: Optional[dict] = None
         self.player_response: Optional[playerResponse] = None
         self.video_type: Optional[str] = None
+        self.isPremiere: Optional[bool] = None
 
         #  API used to fetch metadata
         self.api_ver: str = "v1"
