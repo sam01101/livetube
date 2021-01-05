@@ -149,6 +149,7 @@ class videoDetails:
         # Basic info
         if data:
             self.isLive = data.get("isLive", False)
+            self.isLiveStream = data.get('isLiveContent', False)
             self.video_id = data.get('videoId', "")
             self.channel_id = data.get('channelId', "")
             self.channel_name = data.get('author', "Unknown")
