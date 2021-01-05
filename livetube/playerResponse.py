@@ -58,6 +58,7 @@ class playabilityStatus:
     last_reason: Optional[str] = None
     pollDelayMs: int = 5000
     isCountDown = False
+    isPremiere: bool = False
     scheduled_start_time: Optional[int] = None
 
     def __init__(self, data: dict):
@@ -236,7 +237,8 @@ class playerResponse:
     def update(self, update_items: dict):
         if update_items.get('playabilityStatus'):
             new = playabilityStatus(update_items['playabilityStatus'])
-            self.videoDetails.isLive = new.status == "OK" and new.reason == ""
+            if self.videoDetails:
+                self.videoDetails.isLive = new.status == "OK" and new.reason == ""
             if new.reason != self.playabilityStatus.reason:
                 self.playabilityStatus.last_reason = self.playabilityStatus.reason
             self.playabilityStatus.__dict__.update(new.__dict__)

@@ -253,12 +253,26 @@ class Youtube:
         if self.initial_data:
             pattern = "contents/twoColumnWatchNextResults/results/results/contents/" \
                       "?/videoPrimaryInfoRenderer/badges/0/metadataBadgeRenderer/label"
+
             if video_type := query_selector(self.initial_data, pattern):
-                video_type = video_type[0]
+                video_type: str = video_type[0]
                 if video_type in ["Members only", '会员专享']:
                     self.video_type = "Member"
                 elif video_type in ["Unlisted", '不公开列出']:
                     self.video_type = "Unlisted"
+
+    def check_premiere(self):
+        date_pattern = "contents/twoColumnWatchNextResults/results/results/contents/" \
+                       "?/videoPrimaryInfoRenderer/dateText"
+        is_premiere = False
+        if self.initial_data:
+            is_premiere = query_selector(self.initial_data, date_pattern)
+        if self.player_response.playabilityStatus and \
+                self.player_response.playabilityStatus.reason.find("Premiere") != -1 or is_premiere:
+            if is_premiere:
+                if get_text(is_premiere[0]).find("首播") == -1:
+                    return
+            self.isPremiere = True
 
     def calculate_SNAPPISH(self):
         """
@@ -301,6 +315,7 @@ class Youtube:
         self.player_endpoint = f"https://www.youtube.com/youtubei/{self.api_ver}/player?key={self.api_key}"
         await self.fetch_heartbeat()
         await self.fetch_metadata()
+        self.check_premiere()
 
 
 class Community:
@@ -375,9 +390,11 @@ class Community:
             for tab in tabs:  # type: dict
                 if query_selector(tab, "tabRenderer/title") == "Community":
                     if query_selector(tab, "tabRenderer/selected"):
-                        contents: dict = query_selector(tab, "tabRenderer/content/sectionListRenderer/contents/0/itemSectionRenderer/contents")
+                        contents: dict = query_selector(tab,
+                                                        "tabRenderer/content/sectionListRenderer/contents/0/itemSectionRenderer/contents")
                         for content in contents:
-                            data: dict = query_selector(content, "backstagePostThreadRenderer/post/backstagePostRenderer")
+                            data: dict = query_selector(content,
+                                                        "backstagePostThreadRenderer/post/backstagePostRenderer")
                             raw_data = {
                                 "id": data['postId'],
                                 "author": {
