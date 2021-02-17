@@ -9,12 +9,12 @@ import asyncio
 import json
 from base64 import b64encode, b64decode
 from hashlib import sha1
-from time import time
 from typing import Optional, Dict, Union
 from urllib.parse import parse_qsl, quote, unquote
 
 import aiohttp
 import yarl
+from time import time
 
 from .playerResponse import playerResponse
 from .util.excpetions import RegexMatchError, NetworkError
@@ -393,9 +393,29 @@ class Community:
                     if query_selector(tab, "tabRenderer/selected"):
                         contents: dict = query_selector(tab,
                                                         "tabRenderer/content/sectionListRenderer/contents/0/itemSectionRenderer/contents")
-                        for content in contents:
-                            data: dict = query_selector(content,
-                                                        "backstagePostThreadRenderer/post/backstagePostRenderer")
+
+                        def _create_post(data):
+                            def _attach_media(data, raw_data):
+                                if data.get("sponsorsOnlyBadge"):
+                                    raw_data['type'] = "member"
+                                if backstageAttachment := data.get('backstageAttachment'):  # type: dict
+                                    if videoRenderer := backstageAttachment.get('videoRenderer'):  # type: dict
+                                        thumbnails = videoRenderer['thumbnail']['thumbnails']
+                                        raw_data['video'] = {
+                                            "video_id": videoRenderer.get('videoId'),
+                                            'thumbnail': thumbnails[len(thumbnails) - 1]['url'],
+                                            "title": get_text(videoRenderer['title'])
+                                        }
+                                    if backstageImageRenderer := backstageAttachment.get(
+                                            'backstageImageRenderer'):  # type: dict
+                                        thumbnails = backstageImageRenderer['image']['thumbnails']
+                                        raw_data['image'] = thumbnails[len(thumbnails) - 1]['url']
+                                    if pollRenderer := backstageAttachment.get('pollRenderer'):  # type: dict
+                                        raw_data['votes'] = []
+                                        for choice in pollRenderer['choices']:
+                                            raw_data['votes'].append(f"⭕ {get_text(choice['text'])}")
+                                return raw_data
+
                             raw_data = {
                                 "id": data['postId'],
                                 "author": {
@@ -404,24 +424,30 @@ class Community:
                                 "text": get_text(data['contentText']) if data.get("contentText") else None,
                                 "type": "public"
                             }
-                            if data.get("sponsorsOnlyBadge"):
-                                raw_data['type'] = "member"
-                            if backstageAttachment := data.get('backstageAttachment'):  # type: dict
-                                if videoRenderer := backstageAttachment.get('videoRenderer'):  # type: dict
-                                    thumbnails = videoRenderer['thumbnail']['thumbnails']
-                                    raw_data['video'] = {
-                                        "video_id": videoRenderer.get('videoId'),
-                                        'thumbnail': thumbnails[len(thumbnails) - 1]['url'],
-                                        "title": get_text(videoRenderer['title'])
+                            return _attach_media(data, raw_data)
+
+                        for content in contents:
+                            data: dict = query_selector(content,
+                                                        "backstagePostThreadRenderer/post/backstagePostRenderer")
+                            if not data:
+                                # sharedPost?
+                                data: dict = query_selector(content,
+                                                            "backstagePostThreadRenderer/post/sharedPostRenderer")
+                                if data:
+                                    raw_data = {
+                                        "id": data['postId'],
+                                        "author": {
+                                            "name": get_text(data['displayName'])
+                                        },
+                                        "sharedPost": _create_post(data['originalPost']['backstagePostRenderer']),
+                                        "text": get_text(data['content']) if data.get("content") else None,
+                                        "type": "public"
                                     }
-                                if backstageImageRenderer := backstageAttachment.get(
-                                        'backstageImageRenderer'):  # type: dict
-                                    thumbnails = backstageImageRenderer['image']['thumbnails']
-                                    raw_data['image'] = thumbnails[len(thumbnails) - 1]['url']
-                                if pollRenderer := backstageAttachment.get('pollRenderer'):  # type: dict
-                                    raw_data['votes'] = []
-                                    for choice in pollRenderer['choices']:
-                                        raw_data['votes'].append(f"⭕ {get_text(choice['text'])}")
+                                else:
+                                    print("Malformed post content")
+                                    continue
+                            else:
+                                raw_data = _create_post(data)
                             raw_datas.append(raw_data)
                         break
                     else:
