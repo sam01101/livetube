@@ -536,7 +536,7 @@ class Membership:
             "continuation": continuation_key
         })
 
-    async def parse_membership_info(self, memberships_raw: list, key_raw: list) -> list:
+    async def parse_membership_info(self, memberships_raw: list, key_raw: list) -> tuple:
         for data in key_raw.copy():  # type: int, str
             b64_orig = unquote(data).encode('ascii')
             b64_dec_byte = b64decode(b64_orig)
