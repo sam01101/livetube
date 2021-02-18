@@ -7,6 +7,7 @@
 """
 import asyncio
 import json
+import re
 from asyncio import AbstractEventLoop
 from base64 import b64encode, b64decode
 from hashlib import sha1
@@ -24,6 +25,7 @@ from .util.regex import regex_search
 
 memberships_root_url = "https://www.youtube.com/paid_memberships?pbj=1"
 mainpage_html = "https://www.youtube.com"
+image_regex = re.compile(r"(https://yt3\.ggpht\.com/[A-Za-z0-9\-_]+)=?.+")
 
 
 def get_text(item: dict) -> str:
@@ -432,6 +434,9 @@ class Community:
                                             'backstageImageRenderer'):  # type: dict
                                         thumbnails = backstageImageRenderer['image']['thumbnails']
                                         raw_data['image'] = thumbnails[len(thumbnails) - 1]['url']
+                                        if image_match := image_regex.match(raw_data['image']):
+                                            image_orig_url = image_match.group()
+                                            raw_data['image'] = image_orig_url + "=s0"
                                     if pollRenderer := backstageAttachment.get('pollRenderer'):  # type: dict
                                         raw_data['votes'] = []
                                         for choice in pollRenderer['choices']:
