@@ -129,6 +129,7 @@ class videoDetails:
     title: str
     lengthSeconds: int
     isLive: bool
+    isLiveStream: bool
     keywords: list
     shortDescription: str
     isLiveDvrEnabled: bool

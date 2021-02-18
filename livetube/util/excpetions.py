@@ -26,7 +26,7 @@ class NetworkError(LivetubeError):
     """Network based exception."""
 
 
-class HTMLParseError(LivetubeError):
+class HTMLParseError(ExtractError):
     """HTML could not be parsed"""
 
 

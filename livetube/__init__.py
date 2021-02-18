@@ -19,5 +19,5 @@ try:
 except ModuleNotFoundError:
     pass
 
-from .__main__ import Youtube, Community, Membership
+from .__main__ import Video, Community, Membership, Youtube
 from .util.excpetions import *
