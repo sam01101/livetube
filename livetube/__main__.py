@@ -7,6 +7,7 @@
 """
 import asyncio
 import json
+from asyncio import AbstractEventLoop
 from base64 import b64encode, b64decode
 from hashlib import sha1
 from typing import Optional, Dict, Union
@@ -43,11 +44,12 @@ def string_escape(s, encoding='utf-8') -> str:
 
 
 # noinspection PyDefaultArgument
-class Youtube:
+class Video:
     def __init__(self,
                  video_id: str,
-                 cookie: dict,
-                 header: Optional[Dict[str, Union[str, bool, int]]] = None):
+                 cookie = {},
+                 header: Optional[Dict[str, Union[str, bool, int]]] = None,
+                 loop: Optional[AbstractEventLoop] = None):
         """
         創造一個Youtube obj
 
@@ -81,13 +83,14 @@ class Youtube:
 
         # Client setup
         # Checking SAPISID from cookie
-        if not cookie.get("SAPISID"):
-            print("SAPISID not found, please check your cookie.")
-            exit(1)
+        if not loop:
+            loop = asyncio.get_event_loop()
+        self.loop = loop
         self.cookie = cookie
-        self.cookie_jar = aiohttp.CookieJar(unsafe=True, quote_cookie=False)
-        self.cookie_jar.update_cookies(self.cookie)
-        self.http: Optional[aiohttp.ClientSession] = None
+        cookie_jar = aiohttp.CookieJar(unsafe=True, quote_cookie=False, loop=self.loop)
+        cookie_jar.update_cookies(self.cookie)
+        self.http: aiohttp.ClientSession = aiohttp.ClientSession(
+            headers=self.header, cookie_jar=cookie_jar, loop=self.loop)
 
         # Raw of video info
         self.vid_info_raw: Optional[str] = None
@@ -111,9 +114,13 @@ class Youtube:
         self.continue_id: Optional[str] = None
 
     def __del__(self):
-        loop = asyncio.get_event_loop()
-        if loop and not self.http.closed:
-            asyncio.ensure_future(self.http.close, loop=loop)
+        if not self.http.closed:
+            self.loop.run_until_complete(self.http.close())
+
+    def update_cookie(self, cookie: dict):
+        self.cookie = cookie
+        self.http.cookie_jar.clear()
+        self.http.cookie_jar.update_cookies(cookie)
 
     def create_metadata_body(self, force_video_id: bool = False) -> str:
         """
@@ -282,19 +289,21 @@ class Youtube:
         Algorithm: SHA1(Timestamp + " " + SAPISID + " " + Origin)
         Header: Authorization: SAPISIDHASH timestamp_<SAPISIDHASH>
         """
+        if not self.cookie:
+            return self.header
         timestamp = str(int(time()))
         SAPISID = self.cookie['SAPISID']
         Origin = self.header['X-Origin']
         raw = " ".join([timestamp, SAPISID, Origin])
         _hash = sha1(bytes(raw, encoding="utf8")).hexdigest()
-        return {"Authorization": f"SAPISIDHASH {timestamp}_{_hash}"}
+        new_header = self.header.copy()
+        new_header["Authorization"] = f"SAPISIDHASH {timestamp}_{_hash}"
+        return new_header
 
     async def fetch(self):
         """
         Fetch the youtube main page to get initialize data
         """
-        if self.http is None:
-            self.http = aiohttp.ClientSession(headers=self.header, cookie_jar=self.cookie_jar)
         async with self.http.get(self.watch_url, headers=self.header) as response:
             if response.status != 200:
                 try:
@@ -319,11 +328,15 @@ class Youtube:
         self.check_premiere()
 
 
+Youtube = Video
+
+
 class Community:
     def __init__(self,
                  channel_id: str,
-                 cookie: dict,
-                 header: Optional[Dict[str, Union[str, bool, int]]] = None):
+                 cookie = {},
+                 header: Optional[Dict[str, Union[str, bool, int]]] = None,
+                 loop: Optional[AbstractEventLoop] = None):
 
         self.channel_id = channel_id
         self.community_html: Optional[str] = None
@@ -341,19 +354,29 @@ class Community:
 
         # Client setup
         # Checking SAPISID from cookie
-        if not cookie.get("SAPISID"):
-            print("SAPISID not found, please check your cookie.")
-            exit(1)
+        if not loop:
+            loop = asyncio.get_event_loop()
+        self.loop = loop
         self.cookie = cookie
-        self.cookie_jar = aiohttp.CookieJar(unsafe=True, quote_cookie=False)
-        self.cookie_jar.update_cookies(self.cookie)
-        self.http: Optional[aiohttp.ClientSession] = None
+        cookie_jar = aiohttp.CookieJar(unsafe=True, quote_cookie=False)
+        cookie_jar.update_cookies(self.cookie)
+        self.http: aiohttp.ClientSession = aiohttp.ClientSession(
+            headers=self.header, cookie_jar=cookie_jar, loop=self.loop)
 
         # Url setup
         self.community_root_url = f"https://www.youtube.com/channel/{self.channel_id}/community"
 
         # API setup
         self.api_key: Optional[str] = None
+
+    def __del__(self):
+        if not self.http.closed:
+            self.loop.run_until_complete(self.http.close())
+
+    def update_cookie(self, cookie: dict):
+        self.cookie = cookie
+        self.http.cookie_jar.clear()
+        self.http.cookie_jar.update_cookies(cookie)
 
     def calculate_SNAPPISH(self) -> dict:
         """
@@ -362,12 +385,16 @@ class Community:
         Algorithm: SHA1(Timestamp + " " + SAPISID + " " + Origin)
         Header: Authorization: SAPISIDHASH timestamp_<SAPISIDHASH>
         """
+        if not self.cookie:
+            return self.header
         timestamp = str(int(time()))
         SAPISID = self.cookie['SAPISID']
         Origin = self.header['X-Origin']
         raw = " ".join([timestamp, SAPISID, Origin])
         _hash = sha1(bytes(raw, encoding="utf8")).hexdigest()
-        return {"Authorization": f"SAPISIDHASH {timestamp}_{_hash}"}
+        new_header = self.header.copy()
+        new_header["Authorization"] = f"SAPISIDHASH {timestamp}_{_hash}"
+        return new_header
 
     def create_body(self) -> str:
         """Create a body use to fetch the API"""
@@ -476,8 +503,6 @@ class Community:
         return await self.parse_posts(post_response)
 
     async def fetch(self):
-        if self.http is None:
-            self.http = aiohttp.ClientSession(headers=self.header, cookie_jar=self.cookie_jar)
         async with self.http.get(self.community_root_url,
                                  headers=self.calculate_SNAPPISH()) as response:
             self.community_html = await response.text()
@@ -488,7 +513,10 @@ class Community:
 class Membership:
     def __init__(self,
                  cookie: dict,
-                 header: Optional[Dict[str, Union[str, bool, int]]] = None):
+                 header: Optional[Dict[str, Union[str, bool, int]]] = None,
+                 loop: Optional[AbstractEventLoop] = None):
+        if not loop:
+            self.loop = asyncio.get_event_loop()
 
         self.membership_status_url = "https://www.youtube.com/youtubei/v1/browse?key="
         self.memberships_json: Optional[dict] = None
@@ -522,17 +550,27 @@ class Membership:
             self.header.update(header)
 
         # Client setup
+        if not loop:
+            loop = asyncio.get_event_loop()
+        self.loop = loop
         if not cookie.get("SAPISID"):
-            print("SAPISID not found, please check your cookie.")
-            exit(1)
+            raise ValueError("SAPISID not found, please check your cookie.")
         self.cookie = cookie
-        self.cookie_jar = aiohttp.CookieJar(unsafe=True, quote_cookie=False)
+        self.cookie_jar = aiohttp.CookieJar(unsafe=True, quote_cookie=False, loop=self.loop)
         self.cookie_jar.update_cookies(self.cookie)
-        self.http: Optional[aiohttp.ClientSession] = None
+        self.http: aiohttp.ClientSession = aiohttp.ClientSession(
+            headers=self.header, cookie_jar=self.cookie_jar, loop=self.loop)
 
         # API setup
         self.api_key: Optional[str] = None
         self.__ID_TOKEN__: Optional[str] = None
+
+    def update_cookie(self, cookie: dict):
+        if not cookie.get("SAPISID"):
+            raise ValueError("SAPISID not found, please check your cookie.")
+        self.cookie = cookie
+        self.http.cookie_jar.clear()
+        self.http.cookie_jar.update_cookies(cookie)
 
     def calculate_SNAPPISH(self) -> dict:
         """
@@ -546,9 +584,12 @@ class Membership:
         Origin = self.header['X-Origin']
         raw = " ".join([timestamp, SAPISID, Origin])
         _hash = sha1(bytes(raw, encoding="utf8")).hexdigest()
-        return {"Authorization": f"SAPISIDHASH {timestamp}_{_hash}"}
+        new_header = self.header.copy()
+        new_header["Authorization"] = f"SAPISIDHASH {timestamp}_{_hash}"
+        return new_header
 
-    def create_query_body(self, continuation_key: str) -> str:
+    @staticmethod
+    def create_query_body(continuation_key: str) -> str:
         return json.dumps({
             "context": {
                 "client": {
@@ -593,19 +634,28 @@ class Membership:
                         info['expired'] = True
                         channel_id_raw = b64decode(
                             unquote(serviceEndpoint['ypcGetOffersEndpoint']['params']).encode('ascii'))
-                        info['channel_id']: str = channel_id_raw \
-                            .replace(b"\n\x1c\x08\x03\x12\x18", b"") \
-                            .replace(b"\x18\x032\x15R\x13FEmembership_detail", b"") \
-                            .decode("utf8")
-                    if test_status == "See Perks" or test_status == "Renew":
+                        channel_id_raw = channel_id_raw.decode("utf8")
+                        if ((channel_id_start := channel_id_raw.find("UC")) != -1 or
+                                (channel_id_start := channel_id_raw.find("HC"))):
+                            info['channel_id']: str = channel_id_raw[channel_id_start:24]
+                    elif test_status == "Update payment method":
+                        serviceEndpoint = status.get("serviceEndpoint")
+                        info['paused'] = True
+                        channel_id_raw = b64decode(
+                            unquote(
+                                serviceEndpoint['ypcFixInstrumentEndpoint']['serializedFixFopLoggingParams']).encode(
+                                'ascii'))
+                        channel_id_raw = channel_id_raw.decode("utf8")
+                        if ((channel_id_start := channel_id_raw.find("UC")) != -1 or
+                                (channel_id_start := channel_id_raw.find("HC"))):
+                            info['channel_id']: str = channel_id_raw[channel_id_start:24]
+                    if test_status in ("See Perks", "Renew", "Update payment method"):
                         break
             return info
 
         return await asyncio.gather(*(_fetch_status(steps, data) for steps, data in enumerate(memberships_raw)))
 
     async def fetch(self):
-        if not self.http:
-            self.http = aiohttp.ClientSession(headers=self.header, cookie_jar=self.cookie_jar)
         if not self.api_key:
             async with self.http.get(mainpage_html) as response:
                 mainpage_url = await response.text()
