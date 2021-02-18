@@ -43,11 +43,10 @@ def string_escape(s, encoding='utf-8') -> str:
             .decode(encoding))  # Decode original encoding
 
 
-# noinspection PyDefaultArgument
 class Video:
     def __init__(self,
                  video_id: str,
-                 cookie = {},
+                 cookie=None,
                  header: Optional[Dict[str, Union[str, bool, int]]] = None,
                  loop: Optional[AbstractEventLoop] = None):
         """
@@ -59,6 +58,8 @@ class Video:
         """
 
         # Pre fetch
+        if cookie is None:
+            cookie = {}
         self.watch_html: Optional[str] = None
         self.age_restricted: Optional[bool] = None
 
@@ -112,10 +113,6 @@ class Video:
         self.player_endpoint: str = "https://www.youtube.com/youtubei/v1/player?key="
         """Key for next fetching"""
         self.continue_id: Optional[str] = None
-
-    def __del__(self):
-        if not self.http.closed:
-            self.loop.run_until_complete(self.http.close())
 
     def update_cookie(self, cookie: dict):
         self.cookie = cookie
@@ -334,10 +331,12 @@ Youtube = Video
 class Community:
     def __init__(self,
                  channel_id: str,
-                 cookie = {},
+                 cookie=None,
                  header: Optional[Dict[str, Union[str, bool, int]]] = None,
                  loop: Optional[AbstractEventLoop] = None):
 
+        if cookie is None:
+            cookie = {}
         self.channel_id = channel_id
         self.community_html: Optional[str] = None
         self.post_url: Optional[str] = "https://www.youtube.com/youtubei/v1/browse?key="
@@ -368,10 +367,6 @@ class Community:
 
         # API setup
         self.api_key: Optional[str] = None
-
-    def __del__(self):
-        if not self.http.closed:
-            self.loop.run_until_complete(self.http.close())
 
     def update_cookie(self, cookie: dict):
         self.cookie = cookie
