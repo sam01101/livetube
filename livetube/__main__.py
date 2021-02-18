@@ -25,7 +25,7 @@ from .util.regex import regex_search
 
 memberships_root_url = "https://www.youtube.com/paid_memberships?pbj=1"
 mainpage_html = "https://www.youtube.com"
-image_regex = re.compile(r"(https://yt3\.ggpht\.com/[A-Za-z0-9\-_]+)=?.+")
+image_regex = re.compile(r"(https://yt3\.ggpht\.com/[A-Za-z0-9\-_]+)=.+")
 
 
 def get_text(item: dict) -> str:
