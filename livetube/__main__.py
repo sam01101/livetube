@@ -454,6 +454,11 @@ class Community:
                             return _attach_media(data, raw_data)
 
                         for content in contents:
+                            # Hasn't posted yet?
+                            if ((message := content.get("messageRenderer")) and
+                                    get_text(message.get("text", "")).find("hasn't posted") != -1):
+                                break
+
                             data: dict = query_selector(content,
                                                         "backstagePostThreadRenderer/post/backstagePostRenderer")
                             if not data:
