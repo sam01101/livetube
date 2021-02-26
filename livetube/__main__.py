@@ -435,7 +435,7 @@ class Community:
                                         thumbnails = backstageImageRenderer['image']['thumbnails']
                                         raw_data['image'] = thumbnails[len(thumbnails) - 1]['url']
                                         if image_match := image_regex.match(raw_data['image']):
-                                            image_orig_url = image_match.group()
+                                            image_orig_url = image_match.group(1)
                                             raw_data['image'] = image_orig_url + "=s0"
                                     if pollRenderer := backstageAttachment.get('pollRenderer'):  # type: dict
                                         raw_data['votes'] = []
