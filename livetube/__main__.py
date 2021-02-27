@@ -265,9 +265,9 @@ class Video:
 
             if video_type := query_selector(self.initial_data, pattern):  # type: list
                 video_tag: str = video_type[0]
-                if video_tag in ["Members only", '会员专享']:
+                if video_tag == "Members only":
                     self.video_type = "Member"
-                elif video_tag in ["Unlisted", '不公开列出']:
+                elif video_tag == "Unlisted":
                     self.video_type = "Unlisted"
 
     def check_premiere(self):
@@ -290,7 +290,7 @@ class Video:
         Algorithm: SHA1(Timestamp + " " + SAPISID + " " + Origin)
         Header: Authorization: SAPISIDHASH timestamp_<SAPISIDHASH>
         """
-        if not self.cookie:
+        if not self.cookie or len(self.cookie) == 1:
             return self.header
         timestamp = str(int(time()))
         SAPISID = self.cookie['SAPISID']
@@ -386,7 +386,7 @@ class Community:
         Algorithm: SHA1(Timestamp + " " + SAPISID + " " + Origin)
         Header: Authorization: SAPISIDHASH timestamp_<SAPISIDHASH>
         """
-        if not self.cookie:
+        if not self.cookie or len(self.cookie) == 1:
             return self.header
         timestamp = str(int(time()))
         SAPISID = self.cookie['SAPISID']
