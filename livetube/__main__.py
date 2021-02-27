@@ -61,7 +61,9 @@ class Video:
 
         # Pre fetch
         if cookie is None:
-            cookie = {}
+            cookie = {
+                "PREF": "hl=en"
+            }
         self.watch_html: Optional[str] = None
         self.age_restricted: Optional[bool] = None
 
@@ -338,7 +340,9 @@ class Community:
                  loop: Optional[AbstractEventLoop] = None):
 
         if cookie is None:
-            cookie = {}
+            cookie = {
+                "PREF": "hl=en"
+            }
         self.channel_id = channel_id
         self.community_html: Optional[str] = None
         self.post_url: Optional[str] = "https://www.youtube.com/youtubei/v1/browse?key="
@@ -560,6 +564,7 @@ class Membership:
         self.loop = loop
         if not cookie.get("SAPISID"):
             raise ValueError("SAPISID not found, please check your cookie.")
+        cookie["PREF"] = "hl=en"
         self.cookie = cookie
         self.cookie_jar = aiohttp.CookieJar(unsafe=True, quote_cookie=False, loop=self.loop)
         self.cookie_jar.update_cookies(self.cookie)
