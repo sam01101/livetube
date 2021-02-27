@@ -115,7 +115,7 @@ class streamingData:
             bestW, bestH, bestFPS = 0, 0, 0
             best: Optional[dict] = None
             for _, formats in self.videos.items():
-                w, h, fps = int(formats['width']), int(formats['height']), int(formats['fps'])
+                w, h, fps = int(formats.get("width", 0)), int(formats.get("height", 0)), int(formats.get("fps", 0))
                 if w >= bestW and h >= bestH and fps >= bestFPS:
                     bestW, bestH, bestFPS = w, h, fps
                     best = formats
