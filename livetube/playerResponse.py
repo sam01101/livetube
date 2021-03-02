@@ -205,10 +205,7 @@ class playerResponse:
     def raise_for_status(self):
         status, reason, subreason = self.playabilityStatus.status, self.playabilityStatus.reason, self.playabilityStatus.subreason
         if status == 'UNPLAYABLE':
-            if reason == (
-                    'Join this channel to get access to members-only content '
-                    'like this video, and other exclusive perks.'
-            ):
+            if reason.find("member") != -1:
                 raise MembersOnly
             elif reason == 'This live stream recording is not available.':
                 raise RecordingUnavailable
@@ -224,10 +221,7 @@ class playerResponse:
                 raise VideoPrivate
             raise VideoUnavailable
         elif status == 'LOGIN_REQUIRED':
-            if reason == (
-                    'This is a private video. '
-                    'Please sign in to verify that you may see it.'
-            ):
+            if reason.find("private video") != -1:
                 raise VideoPrivate
             raise VideoUnavailable
         elif status == 'LIVE_STREAM_OFFLINE':
