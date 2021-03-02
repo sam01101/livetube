@@ -26,6 +26,7 @@ from .util.regex import regex_search
 memberships_root_url = "https://www.youtube.com/paid_memberships?pbj=1"
 mainpage_html = "https://www.youtube.com"
 image_regex = re.compile(r"(https://yt3\.ggpht\.com/[A-Za-z0-9\-_]+)=.+")
+redirect_regex = re.compile(r"https://www\.youtube\.com/redirect\?[\w+_&=]+&q=(.+)")
 
 
 def get_text(item: dict) -> str:
@@ -33,8 +34,12 @@ def get_text(item: dict) -> str:
     if item.get("simpleText"):
         return item.get("simpleText")
     ret = ""
-    for cmd in item['runs']:
-        ret += cmd['text']
+    for cmd in item['runs']:  # type: dict
+        if url_ep := cmd.get("urlEndpoint"):
+            if url := redirect_regex.match(url_ep['url']):
+                ret += unquote(url.group(1))
+        else:
+            ret += cmd['text']
     return ret
 
 
