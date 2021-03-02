@@ -35,7 +35,7 @@ def get_text(item: dict) -> str:
         return item.get("simpleText")
     ret = ""
     for cmd in item['runs']:  # type: dict
-        if url_ep := cmd.get("urlEndpoint"):
+        if url_ep := cmd.get("navigationEndpoint", {}).get("urlEndpoint"):
             if url := redirect_regex.match(url_ep['url']):
                 ret += unquote(url.group(1))
             else:
