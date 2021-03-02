@@ -38,6 +38,8 @@ def get_text(item: dict) -> str:
         if url_ep := cmd.get("urlEndpoint"):
             if url := redirect_regex.match(url_ep['url']):
                 ret += unquote(url.group(1))
+            else:
+                ret += url_ep['url']
         else:
             ret += cmd['text']
     return ret
