@@ -213,6 +213,9 @@ class playerResponse:
                 if reason == 'Video unavailable':
                     if subreason == 'The uploader has not made this video available in your country.':
                         raise VideoRegionBlocked
+                    elif subreason == ('This video is no longer available '
+                                       'because the YouTube account associated with this video has been terminated.'):
+                        raise AccountBanned
                 elif reason == 'This video requires payment to watch.':
                     raise PaymentRequired
                 raise VideoUnavailable

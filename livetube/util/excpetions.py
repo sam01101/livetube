@@ -78,6 +78,10 @@ class MembersOnly(LivetubeError):
     """
 
 
+class AccountBanned(LivetubeError):
+    """The youtube account associated with the video has been banned"""
+
+
 class VideoRegionBlocked(ExtractError):
     """Keep for further update"""
     pass
