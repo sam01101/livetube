@@ -68,8 +68,9 @@ def dict_search(data: dict, key: str, depth: int = 3):
             return data[key]
     if depth > 0:
         for keys in data_keys:
-            if result := dict_search(data[keys], key, depth - 1):
-                return result
+            if isinstance(data[keys], dict):
+                if result := dict_search(data[keys], key, depth - 1):
+                    return result
 
 
 def query_selector(path_obj: Union[dict, list], pattern: Union[str, list], results=None) -> Union[
