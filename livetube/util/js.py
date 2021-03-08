@@ -58,6 +58,20 @@ def video_info_url(video_id: str, watch_url: str) -> str:
     return "https://youtube.com/get_video_info?" + urlencode(params)
 
 
+def dict_search(data: dict, key: str, depth: int = 3):
+    """Search a key value in a dict, return None if not found.
+        Warn: This method can be slow due to the amount of depth
+    """
+    data_keys = data.keys()
+    for keys in data_keys:
+        if keys == key:
+            return data[key]
+    if depth > 0:
+        for keys in data_keys:
+            if result := dict_search(data[keys], key, depth - 1):
+                return result
+
+
 def query_selector(path_obj: Union[dict, list], pattern: Union[str, list], results=None) -> Union[
     bool, Union[dict, list]]:
     """

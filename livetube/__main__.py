@@ -20,7 +20,7 @@ from time import time
 
 from .playerResponse import playerResponse
 from .util.excpetions import RegexMatchError, NetworkError
-from .util.js import initial_data, video_info_url, query_selector
+from .util.js import initial_data, video_info_url, query_selector, dict_search
 from .util.regex import regex_search
 
 memberships_root_url = "https://www.youtube.com/paid_memberships?pbj=1"
@@ -49,7 +49,7 @@ def get_text(item: dict) -> str:
 def string_to_long(readable: str) -> int:
     for num_text, num in number_table.items():
         if readable.find(num_text) != -1:
-            return int(readable[:-1]) * num
+            return int(float(readable[:-1]) * num)
     return int(readable)
 
 
@@ -509,7 +509,7 @@ class Community:
             return True
 
     def update_subscriber_count(self, raw: dict):
-        if (count := raw['header'].get("subscriberCountText", {})) and len(count) > 0:
+        if (count := dict_search(raw['header'], "subscriberCountText")) and len(count) > 0:
             subscribers_human_readable: str = get_text(count).replace(" subscribers", "")
             subscribers = string_to_long(subscribers_human_readable)
             if not self.subscribers or subscribers != self.subscribers:
