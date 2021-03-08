@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
    name='livetube',
-   version='1.4.1',
+   version='1.4.2',
    description='A module for youtube livestream',
    url="https://github.com/sam01101/livetube",
    author='Sam',
