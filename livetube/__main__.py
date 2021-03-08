@@ -27,6 +27,7 @@ memberships_root_url = "https://www.youtube.com/paid_memberships?pbj=1"
 mainpage_html = "https://www.youtube.com"
 image_regex = re.compile(r"(https://yt3\.ggpht\.com/[A-Za-z0-9\-_]+)=.+")
 redirect_regex = re.compile(r"https://www\.youtube\.com/redirect\?[\w+_&=]+&q=(.+)")
+number_table = {"K": 1000, "M": 1000000, "B": 1000000000}
 
 
 def get_text(item: dict) -> str:
@@ -43,6 +44,13 @@ def get_text(item: dict) -> str:
         else:
             ret += cmd['text']
     return ret
+
+
+def string_to_long(readable: str) -> int:
+    for num_text, num in number_table.items():
+        if readable.find(num_text) != -1:
+            return int(readable[:-1]) * num
+    return int(readable)
 
 
 def string_escape(s, encoding='utf-8') -> str:
@@ -354,6 +362,7 @@ class Community:
         self.community_html: Optional[str] = None
         self.post_url: Optional[str] = "https://www.youtube.com/youtubei/v1/browse?key="
         self.posts: list = []
+        self.subscribers: Optional[int] = None
 
         # Header
         self.header = {
@@ -499,6 +508,13 @@ class Community:
             self.posts = raw_datas
             return True
 
+    def update_subscriber_count(self, raw: dict):
+        if (count := raw['header'].get("subscriberCountText", {})) and len(count) > 0:
+            subscribers_human_readable: str = get_text(count).replace(" subscribers", "")
+            subscribers = string_to_long(subscribers_human_readable)
+            if not self.subscribers or subscribers != self.subscribers:
+                self.subscribers = subscribers
+
     async def fetch_post(self) -> bool:
         post_response: Optional[dict] = None
         async with self.http.post(self.post_url,
@@ -516,6 +532,7 @@ class Community:
         if not post_response:
             print("Cannot get post resposne")
             return False
+        self.update_subscriber_count(post_response)
         return await self.parse_posts(post_response)
 
     async def fetch(self):
