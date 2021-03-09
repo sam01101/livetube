@@ -9,7 +9,7 @@ from enum import Enum
 from typing import Optional, Dict
 
 from .util.excpetions import MembersOnly, RecordingUnavailable, VideoUnavailable, LiveStreamOffline, VideoPrivate, \
-    RegexMatchError, VideoRegionBlocked, PaymentRequired
+    RegexMatchError, VideoRegionBlocked, PaymentRequired, AccountBanned
 from .util.js import query_selector
 from .util.regex import regex_search
 
