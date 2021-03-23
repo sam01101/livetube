@@ -109,7 +109,7 @@ class streamingData:
             for _, formats in self.audios.items():
                 if int(formats['bitrate']) > bestBitrate:
                     bestBitrate = int(formats['bitrate'])
-                    best = formats
+                    best = self.audios[formats['itag']]
             if best:
                 self.audios['best'] = best
             bestW, bestH, bestFPS = 0, 0, 0
@@ -118,7 +118,7 @@ class streamingData:
                 w, h, fps = int(formats.get("width", 0)), int(formats.get("height", 0)), int(formats.get("fps", 0))
                 if w >= bestW and h >= bestH and fps >= bestFPS:
                     bestW, bestH, bestFPS = w, h, fps
-                    best = formats
+                    best = self.videos[formats['itag']]
             if best:
                 self.videos['best'] = best
 
