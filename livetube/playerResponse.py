@@ -5,6 +5,7 @@
     文件:    playerResponse.py
     文件描述: 
 """
+import time
 from enum import Enum
 from typing import Optional, Dict
 
@@ -94,7 +95,7 @@ class streamingData:
                 try:
                     self.expireTimestamp = int(regex_search(r"/expire/(\d+)/", fmt_link, 1))
                 except RegexMatchError:
-                    pass
+                    self.expireTimestamp = int(time.time()) + self.expiresInSeconds + 120
             adaptiveFormats: list = data.get("adaptiveFormats", [])
             self.audios = {}
             self.videos = {}
