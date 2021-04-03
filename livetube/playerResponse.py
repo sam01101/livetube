@@ -99,14 +99,14 @@ class streamingData:
             for formats in adaptiveFormats:
                 if sig_raw := formats.get('signatureCipher'):
                     if not cipher:
-                        sig_data = parse_qsl(sig_raw)
-                        sig_key = next(data for key, data in sig_data if key == "s")
-                        sig_type = next(data for key, data in sig_data if key == "sp")
-                        sig_url = next(data for key, data in sig_data if key == "url")
                         cipher = Cipher(js=js)
-                        signature = cipher.get_signature(ciphered_signature=sig_key)
-                        formats['url'] = f"{sig_url}&{sig_type}={signature}"
-                        del formats['signatureCipher']
+                    sig_data = parse_qsl(sig_raw)
+                    sig_key = next(data for key, data in sig_data if key == "s")
+                    sig_type = next(data for key, data in sig_data if key == "sp")
+                    sig_url = next(data for key, data in sig_data if key == "url")
+                    signature = cipher.get_signature(ciphered_signature=sig_key)
+                    formats['url'] = f"{sig_url}&{sig_type}={signature}"
+                    del formats['signatureCipher']
 
                 if "audio" in formats['mimeType']:
                     self.audios[formats['itag']] = formats
