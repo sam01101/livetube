@@ -14,12 +14,12 @@ compile_cache = {}
 
 
 # noinspection PyShadowingBuiltins
-def compile(pattren: str) -> Pattern:
+def compile(pattren: str, **kwargs) -> Pattern:
     """Compile a regular expression pattern, returning a Pattern object."""
     if compile_cache.get(pattren):
         return compile_cache[pattren]
     else:
-        cache = re.compile(pattren)
+        cache = re.compile(pattren, **kwargs)
         compile_cache[pattren] = cache
         return cache
 

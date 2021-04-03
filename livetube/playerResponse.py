@@ -8,11 +8,13 @@
 import time
 from enum import Enum
 from typing import Optional, Dict
+from urllib.parse import parse_qsl, quote, unquote, parse_qs
 
 from .util.excpetions import MembersOnly, RecordingUnavailable, VideoUnavailable, LiveStreamOffline, VideoPrivate, \
     RegexMatchError, VideoRegionBlocked, PaymentRequired, AccountBanned
 from .util.js import query_selector
 from .util.regex import regex_search
+from .util.cipher import Cipher
 
 
 def extract_string(data: dict):
@@ -85,21 +87,27 @@ class streamingData:
     audios: Dict[str, dict]
     videos: Dict[str, dict]
 
-    def __init__(self, data: dict):
+    def __init__(self, data: dict, js: Optional[str] = None):
         if data.get('expiresInSeconds'):
+            cipher: Optional[Cipher] = None
             self.expiresInSeconds = int(data.get('expiresInSeconds'))
             self.hlsManifestUrl = data.get('hlsManifestUrl')
             self.dashManifestUrl = data.get('dashManifestUrl')
-            # Get timestamp of expire time
-            if fmt_link := (self.hlsManifestUrl or self.dashManifestUrl):
-                try:
-                    self.expireTimestamp = int(regex_search(r"/expire/(\d+)/", fmt_link, 1))
-                except RegexMatchError:
-                    self.expireTimestamp = int(time.time()) + self.expiresInSeconds + 120
             adaptiveFormats: list = data.get("adaptiveFormats", [])
             self.audios = {}
             self.videos = {}
             for formats in adaptiveFormats:
+                if sig_raw := formats.get('signatureCipher'):
+                    if not cipher:
+                        sig_data = parse_qsl(sig_raw)
+                        sig_key = next(data for key, data in sig_data if key == "s")
+                        sig_type = next(data for key, data in sig_data if key == "sp")
+                        sig_url = next(data for key, data in sig_data if key == "url")
+                        cipher = Cipher(js=js)
+                        signature = cipher.get_signature(ciphered_signature=sig_key)
+                        formats['url'] = f"{sig_url}&{sig_type}={signature}"
+                        del formats['signatureCipher']
+
                 if "audio" in formats['mimeType']:
                     self.audios[formats['itag']] = formats
                 elif "mp4" in formats['mimeType']:
@@ -108,11 +116,10 @@ class streamingData:
             bestBitrate: int = 0
             best: Optional[dict] = None
             for _, formats in self.audios.items():
-                if int(formats['bitrate']) > bestBitrate:
+                if int(formats['bitrate']) > bestBitrate and formats['mimeType'].find("mp4") != -1:
                     bestBitrate = int(formats['bitrate'])
                     best = self.audios[formats['itag']]
-            if best:
-                self.audios['best'] = best
+            self.audios['best'] = best if best else None
             bestW, bestH, bestFPS = 0, 0, 0
             best: Optional[dict] = None
             for _, formats in self.videos.items():
@@ -120,8 +127,12 @@ class streamingData:
                 if w >= bestW and h >= bestH and fps >= bestFPS:
                     bestW, bestH, bestFPS = w, h, fps
                     best = self.videos[formats['itag']]
-            if best:
-                self.videos['best'] = best
+            self.videos['best'] = best if best else None
+            # Get timestamp of expire time
+            try:
+                self.expireTimestamp = int(regex_search(r"/expire/(\d+)/", self.videos['best']['url'], 1))
+            except (RegexMatchError, KeyError):
+                self.expireTimestamp = int(time.time()) + self.expiresInSeconds + 120
 
 
 class videoDetails:
@@ -194,14 +205,14 @@ class playerResponse:
     videoDetails: Optional[videoDetails] = None
     streamData: Optional[streamingData] = None
 
-    def __init__(self, player_response: dict):
+    def __init__(self, player_response: dict, js: str):
         self.responseContext = responseContext(player_response.get('responseContext'))
         self.playabilityStatus = playabilityStatus(player_response.get('playabilityStatus'))
         if player_response.get('videoDetails'):
             self.videoDetails = videoDetails(player_response.get('videoDetails'), player_response.get('microformat'))
             self.videoDetails.isLive = self.playabilityStatus.status == "OK" and self.playabilityStatus.reason == ""
         if player_response.get('streamingData'):
-            self.streamData = streamingData(player_response.get('streamingData'))
+            self.streamData = streamingData(player_response.get('streamingData'), js)
 
     def raise_for_status(self):
         status, reason, subreason = self.playabilityStatus.status, self.playabilityStatus.reason, self.playabilityStatus.subreason

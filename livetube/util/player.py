@@ -10,6 +10,20 @@ from .parser import parse_for_object
 from .regex import compile
 
 
+def js_url(html: str) -> str:
+    """Get the base JavaScript url.
+    Construct the base JavaScript url, which contains the decipher
+    "transforms".
+    :param str html:
+        The html contents of the watch page.
+    """
+    try:
+        base_js = get_ytplayer_config(html)['assets']['js']
+    except (KeyError, RegexMatchError):
+        base_js = get_ytplayer_js(html)
+    return "https://youtube.com" + base_js
+
+
 def get_ytplayer_js(html: str) -> str:
     """Get the YouTube player base JavaScript path.
 

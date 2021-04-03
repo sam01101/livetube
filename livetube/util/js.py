@@ -12,7 +12,6 @@ from urllib.parse import quote, urlencode
 from .excpetions import RegexMatchError, HTMLParseError
 from .parser import parse_for_object
 
-
 def initial_data(watch_html: str) -> dict:
     """Extract the ytInitialData json from the watch_html page.
 
@@ -76,7 +75,7 @@ def dict_search(data: dict, key: str, depth: int = 3):
 def query_selector(path_obj: Union[dict, list], pattern: Union[str, list], results=None) -> Union[
     bool, Union[dict, list]]:
     """
-    lightwight jq, see gist for why this function exists
+    simple jq impl in Python
 
     see https://gist.github.com/sam01101/b35da7ffad74849c2d941429c74a2365
 

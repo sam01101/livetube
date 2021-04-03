@@ -5,6 +5,7 @@
     文件:    __main__.py
     文件描述: 
 """
+import logging
 import asyncio
 import json
 import re
@@ -19,16 +20,22 @@ import yarl
 from time import time
 
 from .playerResponse import playerResponse
+from .util import player
 from .util.excpetions import RegexMatchError, NetworkError
 from .util.js import initial_data, video_info_url, query_selector, dict_search
 from .util.regex import regex_search
+
+logger = logging.getLogger("livetube")
 
 memberships_root_url = "https://www.youtube.com/paid_memberships?pbj=1"
 mainpage_html = "https://www.youtube.com"
 image_regex = re.compile(r"(https://yt3\.ggpht\.com/[A-Za-z0-9\-_]+)=.+")
 redirect_regex = re.compile(r"https://www\.youtube\.com/redirect\?[\w+_&=]+&q=(.+)")
 number_table = {"K": 1000, "M": 1000000, "B": 1000000000}
-
+js_cache = {
+    "url": "",
+    "data": ""
+}
 
 def get_text(item: dict) -> str:
     # exection = runs
@@ -81,6 +88,9 @@ class Video:
             }
         self.watch_html: Optional[str] = None
         self.age_restricted: Optional[bool] = None
+        # js
+        self.js_url: Optional[str] = None
+        self.js: Optional[str] = None
 
         # Getting video_id
         if video_id.startswith("http"):
@@ -271,7 +281,7 @@ class Video:
         self.api_key = self.vid_info['innertube_api_key']
         self.api_client_ver = self.vid_info['innertube_context_client_version']
         self.player_config_args = self.vid_info
-        self.player_response: playerResponse = playerResponse(json.loads(self.vid_info['player_response']))
+        self.player_response: playerResponse = playerResponse(json.loads(self.vid_info['player_response']), self.js)
 
     def check_video_type(self):
         if self.initial_data:
@@ -332,6 +342,13 @@ class Video:
         self.vid_info_url = video_info_url(
             self.video_id, self.watch_url
         )
+        self.js_url = player.js_url(self.watch_html)
+        if js_cache['url'] != self.js_url:
+            js_cache['url'] = self.js_url
+            async with self.http.get(self.js_url, headers=self.header) as response:
+                if response.status == 200:
+                    js_cache['data'] = await response.text()
+        self.js = js_cache['data']
         self.initial_data = initial_data(self.watch_html)
         self.check_video_type()
         await self.fetch_video_info()
@@ -496,14 +513,14 @@ class Community:
                                         "type": "public"
                                     }
                                 else:
-                                    print("Malformed post content")
+                                    logger.warning("Malformed post content")
                                     continue
                             else:
                                 raw_data = _create_post(data)
                             raw_datas.append(raw_data)
                         break
                     else:
-                        print("Unexpected: Didn't select community selection")
+                        logger.error("Unexpected: Didn't select community selection")
                         return False
             self.posts = raw_datas
             return True
@@ -521,16 +538,17 @@ class Community:
                                   headers=self.calculate_SNAPPISH(),
                                   data=self.create_body()) as response:
             if response.status != 200:
-                print(f"Invaild response status code (Code {response.status})")
-                print(await response.text())
+                logger.warning(f"Invaild response status code (Code {response.status})")
+                logger.warning(await response.text())
                 return False
             try:
                 post_response = await response.json()
             except json.JSONDecodeError:
-                print(f"Malformated post response", post_response)
+                if post_response != "":
+                    logger.warning(f"Malformated post response", post_response)
                 return False
         if not post_response:
-            print("Cannot get post resposne")
+            logger.error("Cannot get post resposne")
             return False
         self.update_subscriber_count(post_response)
         return await self.parse_posts(post_response)
