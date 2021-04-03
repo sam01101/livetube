@@ -545,7 +545,7 @@ class Community:
                 post_response = await response.json()
             except json.JSONDecodeError:
                 if post_response != "":
-                    logger.warning(f"Malformated post response", post_response)
+                    logger.warning(f"Malformated post response {post_response}")
                 return False
         if not post_response:
             logger.error("Cannot get post resposne")
