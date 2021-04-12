@@ -8,13 +8,13 @@
 import time
 from enum import Enum
 from typing import Optional, Dict
-from urllib.parse import parse_qsl, quote, unquote, parse_qs
+from urllib.parse import parse_qsl
 
+from .util.cipher import Cipher
 from .util.excpetions import MembersOnly, RecordingUnavailable, VideoUnavailable, LiveStreamOffline, VideoPrivate, \
     RegexMatchError, VideoRegionBlocked, PaymentRequired, AccountBanned
-from .util.js import query_selector
+from .util.js import query_selector, js_cache
 from .util.regex import regex_search
-from .util.cipher import Cipher
 
 
 def extract_string(data: dict):
@@ -87,7 +87,7 @@ class streamingData:
     audios: Dict[str, dict]
     videos: Dict[str, dict]
 
-    def __init__(self, data: dict, js: Optional[str] = None):
+    def __init__(self, data: dict, js: str):
         if data.get('expiresInSeconds'):
             cipher: Optional[Cipher] = None
             self.expiresInSeconds = int(data.get('expiresInSeconds'))
@@ -98,7 +98,10 @@ class streamingData:
             self.videos = {}
             for formats in adaptiveFormats:
                 if sig_raw := formats.get('signatureCipher'):
-                    if not cipher:
+                    if not cipher and not js_cache['data']:
+                        raise ValueError("js not found, consider fetching video again.")
+                    elif not js:
+                        js = js_cache['data']
                         cipher = Cipher(js=js)
                     sig_data = parse_qsl(sig_raw)
                     sig_key = next(data for key, data in sig_data if key == "s")
@@ -245,7 +248,7 @@ class playerResponse:
         elif status != "OK":
             raise VideoUnavailable
 
-    def update(self, update_items: dict):
+    def update(self, update_items: dict, js: str):
         if update_items.get('playabilityStatus'):
             new = playabilityStatus(update_items['playabilityStatus'])
             if self.videoDetails:
@@ -257,7 +260,7 @@ class playerResponse:
             new = responseContext(update_items['responseContext'])
             self.responseContext.__dict__.update(new.__dict__)
         if update_items.get('streamingData'):
-            new = streamingData(update_items['streamingData'])
+            new = streamingData(update_items['streamingData'], js)
             if self.streamData:
                 self.streamData.__dict__.update(new.__dict__)
             else:

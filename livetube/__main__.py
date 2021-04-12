@@ -20,6 +20,7 @@ import yarl
 from time import time
 
 from .playerResponse import playerResponse
+from .util.js import js_cache
 from .util import player
 from .util.excpetions import RegexMatchError, NetworkError
 from .util.js import initial_data, video_info_url, query_selector, dict_search
@@ -32,10 +33,6 @@ mainpage_html = "https://www.youtube.com"
 image_regex = re.compile(r"(https://yt3\.ggpht\.com/[A-Za-z0-9\-_]+)=.+")
 redirect_regex = re.compile(r"https://www\.youtube\.com/redirect\?[\w+_&=]+&q=(.+)")
 number_table = {"K": 1000, "M": 1000000, "B": 1000000000}
-js_cache = {
-    "url": "",
-    "data": ""
-}
 
 def get_text(item: dict) -> str:
     # exection = runs
@@ -251,7 +248,7 @@ class Video:
                     raise NetworkError(f"{r['error']['code']} {r['error']['message']}")
             except (json.JSONDecodeError, KeyError) as e:
                 raise NetworkError("Malformed JSON error") from e
-            self.player_response.update(r)
+            self.player_response.update(r, self.js)
 
     async def fetch_player(self):
         """Get the player"""
@@ -263,7 +260,7 @@ class Video:
                     raise NetworkError(f"{r['error']['code']} {r['error']['message']}")
             except (json.JSONDecodeError, KeyError) as e:
                 raise NetworkError("Malformed JSON error") from e
-            self.player_response.update(r)
+            self.player_response.update(r, self.js)
 
     async def fetch_video_info(self):
         async with self.http.get(yarl.URL(self.vid_info_url, encoded=True),

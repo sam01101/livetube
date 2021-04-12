@@ -12,6 +12,11 @@ from urllib.parse import quote, urlencode
 from .excpetions import RegexMatchError, HTMLParseError
 from .parser import parse_for_object
 
+js_cache = {
+    "url": "",
+    "data": ""
+}
+
 def initial_data(watch_html: str) -> dict:
     """Extract the ytInitialData json from the watch_html page.
 
