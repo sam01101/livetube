@@ -12,7 +12,7 @@ from urllib.parse import parse_qsl
 
 from .util.cipher import Cipher
 from .util.excpetions import MembersOnly, RecordingUnavailable, VideoUnavailable, LiveStreamOffline, VideoPrivate, \
-    RegexMatchError, VideoRegionBlocked, PaymentRequired, AccountBanned
+    RegexMatchError, VideoRegionBlocked, PaymentRequired, AccountBanned, HTMLParseError
 from .util.js import query_selector, js_cache
 from .util.regex import regex_search
 
@@ -99,10 +99,12 @@ class streamingData:
             for formats in adaptiveFormats:
                 if sig_raw := formats.get('signatureCipher'):
                     if not cipher and not js_cache['data']:
-                        raise ValueError("js not found, consider fetching video again.")
+                        raise HTMLParseError("js not found, consider fetching video again.")
                     elif not js:
                         js = js_cache['data']
-                        cipher = Cipher(js=js)
+                    cipher = Cipher(js=js)
+                    if not cipher:
+                        raise HTMLParseError("Cipher can't be parsed")
                     sig_data = parse_qsl(sig_raw)
                     sig_key = next(data for key, data in sig_data if key == "s")
                     sig_type = next(data for key, data in sig_data if key == "sp")
