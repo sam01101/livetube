@@ -5,25 +5,25 @@
     文件:    __main__.py
     文件描述: 
 """
-import logging
 import asyncio
 import json
+import logging
 import re
 from asyncio import AbstractEventLoop
 from base64 import b64encode, b64decode
 from hashlib import sha1
+from time import time
 from typing import Optional, Dict, Union
 from urllib.parse import parse_qsl, quote, unquote
 
 import aiohttp
 import yarl
-from time import time
 
 from .playerResponse import playerResponse
-from .util.js import js_cache
 from .util import player
 from .util.excpetions import RegexMatchError, NetworkError
 from .util.js import initial_data, video_info_url, query_selector, dict_search
+from .util.js import js_cache
 from .util.regex import regex_search
 
 logger = logging.getLogger("livetube")
@@ -33,6 +33,7 @@ mainpage_html = "https://www.youtube.com"
 image_regex = re.compile(r"(https://yt3\.ggpht\.com/[A-Za-z0-9\-_]+)=.+")
 redirect_regex = re.compile(r"https://www\.youtube\.com/redirect\?[\w+_&=]+&q=(.+)")
 number_table = {"K": 1000, "M": 1000000, "B": 1000000000}
+
 
 def get_text(item: dict) -> str:
     # exection = runs
@@ -350,9 +351,10 @@ class Video:
         self.check_video_type()
         await self.fetch_video_info()
         """Fetch metadata and player for first time"""
-        self.metadata_endpoint = f"https://www.youtube.com/youtubei/{self.api_ver}/updated_metadata?key={self.api_key}"
-        self.heartbeat_endpoint = f"https://www.youtube.com/youtubei/{self.api_ver}/player/heartbeat?alt=json&key={self.api_key}"
-        self.player_endpoint = f"https://www.youtube.com/youtubei/{self.api_ver}/player?key={self.api_key}"
+        internal_endpoint = "https://www.youtube.com/youtubei"
+        self.metadata_endpoint = f"{internal_endpoint}/{self.api_ver}/updated_metadata?key={self.api_key}"
+        self.heartbeat_endpoint = f"{internal_endpoint}/{self.api_ver}/player/heartbeat?alt=json&key={self.api_key}"
+        self.player_endpoint = f"{internal_endpoint}/{self.api_ver}/player?key={self.api_key}"
         await self.fetch_heartbeat()
         await self.fetch_metadata()
         self.check_premiere()
@@ -449,10 +451,18 @@ class Community:
             for tab in tabs:  # type: dict
                 if query_selector(tab, "tabRenderer/title") == "Community":
                     if query_selector(tab, "tabRenderer/selected"):
-                        contents: dict = query_selector(tab,
-                                                        "tabRenderer/content/sectionListRenderer/contents/0/itemSectionRenderer/contents")
+                        path = "tabRenderer/content/sectionListRenderer/contents/0/itemSectionRenderer/contents"
+                        contents: dict = query_selector(tab, path)
 
                         def _create_post(data):
+                            def _get_image_from_elem(elem) -> str:
+                                images = elem['image']['thumbnails']
+                                image = images[len(images) - 1]['url']
+                                if image_match := image_regex.match(image):
+                                    image_orig_url = image_match.group(1)
+                                    image = image_orig_url + "=s0"
+                                return image
+
                             def _attach_media(data, raw_data):
                                 if data.get("sponsorsOnlyBadge"):
                                     raw_data['type'] = "member"
@@ -464,13 +474,16 @@ class Community:
                                             'thumbnail': thumbnails[len(thumbnails) - 1]['url'],
                                             "title": get_text(videoRenderer['title'])
                                         }
-                                    if backstageImageRenderer := backstageAttachment.get(
-                                            'backstageImageRenderer'):  # type: dict
-                                        thumbnails = backstageImageRenderer['image']['thumbnails']
-                                        raw_data['image'] = thumbnails[len(thumbnails) - 1]['url']
-                                        if image_match := image_regex.match(raw_data['image']):
-                                            image_orig_url = image_match.group(1)
-                                            raw_data['image'] = image_orig_url + "=s0"
+
+                                    if backstageImageRenderer := backstageAttachment.get('backstageImageRenderer'
+                                                                                         ):  # type: dict
+                                        raw_data['images'] = [_get_image_from_elem(backstageImageRenderer)]
+                                    elif postMultiImageRenderer := backstageAttachment.get('postMultiImageRenderer'
+                                                                                           ):  # type: dict
+                                        images = []
+                                        for raw_image in postMultiImageRenderer['images']:
+                                            images.append(_get_image_from_elem(raw_image['backstageImageRenderer']))
+                                        raw_data['images'] = images
                                     if pollRenderer := backstageAttachment.get('pollRenderer'):  # type: dict
                                         raw_data['votes'] = []
                                         for choice in pollRenderer['choices']:
@@ -509,8 +522,13 @@ class Community:
                                         "text": get_text(data['content']) if data.get("content") else None,
                                         "type": "public"
                                     }
+                                elif content.get('continuationItemRenderer'):
+                                    # Has more posts
+                                    break
                                 else:
-                                    logger.warning("Malformed post content")
+                                    post_id = data['postId'] if data else None
+                                    hint = "post " + post_id if post_id else "channel id " + self.channel_id
+                                    logger.warning(f"Malformed post content for {hint}")
                                     continue
                             else:
                                 raw_data = _create_post(data)
@@ -535,17 +553,17 @@ class Community:
                                   headers=self.calculate_SNAPPISH(),
                                   data=self.create_body()) as response:
             if response.status != 200:
-                logger.warning(f"Invaild response status code (Code {response.status})")
+                logger.warning(f"Invalid response status code (Code {response.status})")
                 logger.warning(await response.text())
                 return False
             try:
                 post_response = await response.json()
             except json.JSONDecodeError:
                 if post_response != "":
-                    logger.warning(f"Malformated post response {post_response}")
+                    logger.warning(f"Malformed post response {post_response}")
                 return False
         if not post_response:
-            logger.error("Cannot get post resposne")
+            logger.error("Cannot get post response")
             return False
         self.update_subscriber_count(post_response)
         return await self.parse_posts(post_response)
