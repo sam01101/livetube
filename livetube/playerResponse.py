@@ -107,7 +107,7 @@ class streamingData:
                         js = js_cache['data']
                     cipher = Cipher(js=js)
                     if not cipher:
-                        raise HTMLParseError("Cipher can't be parsed")
+                        raise HTMLParseError("Cipher parse failed")
                     sig_data = parse_qsl(sig_raw)
                     sig_key = next(data for key, data in sig_data if key == "s")
                     sig_type = next(data for key, data in sig_data if key == "sp")
@@ -226,7 +226,10 @@ class playerResponse:
         status, reason, subreason = self.playabilityStatus.status, self.playabilityStatus.reason, self.playabilityStatus.subreason
         if status == 'UNPLAYABLE':
             if reason.find("member") != -1:
-                raise MembersOnly
+                if reason.find("higher") != -1:
+                    raise MembersOnly(reason)
+                else:
+                    raise MembersOnly
             elif reason == 'This live stream recording is not available.':
                 raise RecordingUnavailable
             else:
