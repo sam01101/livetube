@@ -43,12 +43,15 @@ class responseContext:
     logged_in: bool
 
     def __init__(self, data: dict):
-        FEEDBACK: list
         self.serviceTrackingParams = data.get('serviceTrackingParams')
         if self.serviceTrackingParams:
-            FEEDBACK = self.serviceTrackingParams[0]['params']
-            self.is_viewed_live = FEEDBACK[0]['value']
-            self.logged_in = FEEDBACK[1]['value']
+            for serviceTrackingParam in self.serviceTrackingParams:
+                if serviceTrackingParam.get('service', '') == "GFEEDBACK":
+                    for param in serviceTrackingParam['params']:
+                        if param['key'] == "logged_in":
+                            self.logged_in = param['value'] == "1"
+                        elif param['key'] == "is_viewed_live":
+                            self.is_viewed_live = param['value'] == "1"
 
 
 # last_reason
