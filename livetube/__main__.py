@@ -680,6 +680,8 @@ class Membership:
 
         async def _fetch_status(steps: int, data: dict) -> dict:
             data: list = data["textRenderers"]
+            if len(data) < 2:
+                return {}
             vtuber_name = get_text(data[0]["cardItemTextRenderer"]['text'])
             perk_status = get_text(data[1]["cardItemTextRenderer"]['text'])
             info = {
@@ -720,15 +722,20 @@ class Membership:
                         break
             return info
 
-        return await asyncio.gather(*(_fetch_status(steps, data) for steps, data in enumerate(memberships_raw)))
+        memberships_full = await asyncio.gather(*(_fetch_status(steps, data)
+                                                  for steps, data in enumerate(memberships_raw)))
+        return tuple(membership for membership in memberships_full if membership)
 
-    async def fetch(self):
+    async def fetch(self) -> bool:
         if not self.api_key:
             async with self.http.get(mainpage_html) as response:
                 mainpage_url = await response.text()
                 self.api_key = regex_search(r"\"INNERTUBE_API_KEY\":\"([A-Za-z0-9_\-]+)\",", mainpage_url, 1)
-                self.__ID_TOKEN__ = string_escape(
-                    regex_search(r"\"ID_TOKEN\":\"([A-Za-z0-9_\\\-=\/\+]+)\",", mainpage_url, 1))
+                try:
+                    self.__ID_TOKEN__ = string_escape(
+                        regex_search(r"\"ID_TOKEN\":\"([A-Za-z0-9_\\\-=\/\+]+)\",", mainpage_url, 1))
+                except RegexMatchError:
+                    return False
                 self.header.update({
                     "X-YouTube-Client-Name": "1",
                     "X-YouTube-Client-Version": "2.20770101.08.00",
@@ -737,7 +744,13 @@ class Membership:
                 self.membership_status_url += self.api_key
 
         async with self.http.get(memberships_root_url, headers=self.header) as response:
-            self.memberships_json = await response.json()
+            if response.status == 200 and response.content_type == "application/json":
+                self.memberships_json = await response.json()
+            else:
+                if response.content_type == "text/html":
+                    logger.warning(f"Cookie expired.")
+                return False
         memberships_raw = query_selector(self.memberships_json, self.membership_pattern)
         key_raw = query_selector(self.memberships_json, self.continuation_pattern)
         self.memberships = await self.parse_membership_info(memberships_raw, key_raw)
+        return True

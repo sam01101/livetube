@@ -39,8 +39,8 @@ class latencyType(Enum):
 
 class responseContext:
     serviceTrackingParams: list
-    is_viewed_live: bool
-    logged_in: bool
+    is_viewed_live: bool = False
+    logged_in: bool = False
 
     def __init__(self, data: dict):
         self.serviceTrackingParams = data.get('serviceTrackingParams')
