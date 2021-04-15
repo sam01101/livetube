@@ -228,6 +228,9 @@ class Video:
         async with self.http.post(self.metadata_endpoint, data=self.create_metadata_body(),
                                   headers=self.calculate_SNAPPISH()) as response:
             try:
+                if response.content_type == "text/html":
+                    logger.warning(f"Failed to fetch metadata for {self.video_id}")
+                    return
                 r: dict = await response.json()
                 if r.get("error"):
                     raise NetworkError(f"{r['error']['code']} {r['error']['message']}")
@@ -244,6 +247,9 @@ class Video:
         async with self.http.post(self.heartbeat_endpoint, data=self.create_heartbeat_body(),
                                   headers=self.calculate_SNAPPISH()) as response:
             try:
+                if response.content_type == "text/html":
+                    logger.warning(f"Failed to fetch heartbeat for {self.video_id}")
+                    return
                 r: dict = await response.json()
                 if r.get("error"):
                     raise NetworkError(f"{r['error']['code']} {r['error']['message']}")
@@ -256,6 +262,9 @@ class Video:
         async with self.http.post(self.player_endpoint, data=self.create_metadata_body(True),
                                   headers=self.calculate_SNAPPISH()) as response:
             try:
+                if response.content_type == "text/html":
+                    logger.warning(f"Failed to fetch player for {self.video_id}")
+                    return
                 r: dict = await response.json()
                 if r.get("error"):
                     raise NetworkError(f"{r['error']['code']} {r['error']['message']}")
@@ -268,6 +277,9 @@ class Video:
                                  headers=self.calculate_SNAPPISH()) as response:
             if response.status != 200:
                 try:
+                    if response.content_type == "text/html":
+                        logger.warning(f"Failed to fetch video info for {self.video_id}")
+                        return
                     r: dict = await response.json()
                     if r.get("error"):
                         raise NetworkError(f"{r['error']['code']} {r['error']['message']}")
