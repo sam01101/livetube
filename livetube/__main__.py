@@ -33,6 +33,12 @@ mainpage_html = "https://www.youtube.com"
 image_regex = re.compile(r"(https://yt3\.ggpht\.com/[A-Za-z0-9\-_]+)=.+")
 redirect_regex = re.compile(r"https://www\.youtube\.com/redirect\?[\w+_&=]+&q=(.+)")
 number_table = {"K": 1000, "M": 1000000, "B": 1000000000}
+user_agent = " ".join([
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+    "AppleWebKit/537.36 (KHTML, like Gecko)",
+    "Chrome/90.0.4430.72",
+    "Safari/537.36"
+])
 
 
 def get_text(item: dict) -> str:
@@ -102,8 +108,7 @@ class Video:
 
         # Header
         self.header = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)"
-                          " Chrome/87.0.4280.88 Safari/537.36",
+            "User-Agent": user_agent,
             "X-Origin": "https://www.youtube.com"
         }
         if header:
@@ -155,7 +160,6 @@ class Video:
             "context": {
                 "client": {
                     "hl": "en_US",
-                    "isInternal": True,
                     "clientName": self.api_client_name,
                     "clientVersion": self.api_client_ver
                 }
@@ -394,8 +398,7 @@ class Community:
 
         # Header
         self.header = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)"
-                          " Chrome/87.0.4280.88 Safari/537.36",
+            "User-Agent": user_agent,
             "X-Origin": "https://www.youtube.com"
         }
         if header:
@@ -620,8 +623,7 @@ class Membership:
 
         # Header
         self.header = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)"
-                          " Chrome/87.0.4280.88 Safari/537.36",
+            "User-Agent": user_agent,
             "X-Origin": "https://www.youtube.com"
         }
         if header:
@@ -766,3 +768,69 @@ class Membership:
         key_raw = query_selector(self.memberships_json, self.continuation_pattern)
         self.memberships = await self.parse_membership_info(memberships_raw, key_raw)
         return True
+
+
+async def get_animation_thumbnail(video_id: str) -> str:
+    with aiohttp.ClientSession() as http:
+        watch_url = f"https://www.youtube.com/watch?v={video_id}"
+
+        def create_search_body(client_name: str = "WEB", client_version: str = "2.20770101.00.00",
+                               browser_name="Chrome", browser_version="90.0.4430.72") -> dict:
+            return {
+                "context": {
+                    "client": {
+                        "hl": "en_US",
+                        "clientName": client_name,
+                        "clientVersion": client_version,
+                        "browserName": browser_name,
+                        "browserVersion": browser_version
+                    }
+                },
+                "query": watch_url
+            }
+
+        async with http.get(yarl.URL(video_info_url(video_id, watch_url), encoded=True)) as response:
+            if response.status != 200:
+                try:
+                    if response.content_type == "text/html":
+                        logger.warning(f"Failed to fetch video info for {video_id}")
+                        return ""
+                    r: dict = await response.json()
+                    if r.get("error"):
+                        raise NetworkError(f"{r['error']['code']} {r['error']['message']}")
+                except json.JSONDecodeError:
+                    pass
+            vid_info_raw = await response.text()
+        vid_info = dict(parse_qsl(vid_info_raw))
+        api_ver = vid_info['innertube_api_version']
+        api_key = vid_info['innertube_api_key']
+        api_client_ver = vid_info['innertube_context_client_version']
+        search_url = f"https://www.youtube.com/youtubei/{api_ver}/search?key={api_key}"
+        a = create_search_body(client_version=api_client_ver)
+        async with http.post(search_url, json=create_search_body(client_version=api_client_ver), headers={
+            "User-Agent": user_agent
+        }) as response:
+            if response.status != 200:
+                try:
+                    if response.content_type == "text/html":
+                        logger.warning(f"Failed to query video search for {video_id}")
+                        return ""
+                    r: dict = await response.json()
+                    if r.get("error"):
+                        raise NetworkError(f"{r['error']['code']} {r['error']['message']}")
+                except json.JSONDecodeError:
+                    return ""
+            else:
+                result = await response.json()
+        pattern = ("contents/twoColumnSearchResultsRenderer/primaryContents/sectionListRenderer/contents/?/"
+                   f"itemSectionRenderer/contents/?/videoRenderer/videoId:{video_id}")
+        if test := query_selector(result, pattern):
+            video_info = test[0]
+            if thumbnail := video_info.get("richThumbnail"):
+                return thumbnail['movingThumbnailRenderer']['movingThumbnailDetails']['thumbnails'][0]['url']
+            else:
+                logger.warning(f"{video_id} has no preview thumbnail")
+                return ""
+        else:
+            logger.warning(f"Failed to query video search for {video_id}")
+            return ""

@@ -96,6 +96,7 @@ def query_selector(path_obj: Union[dict, list], pattern: Union[str, list], resul
     """
     About the pattern:
     ? - Any number
+    key:value - Exact value
     """
     try:
         last_path: Optional[Union[dict, list]] = path_obj
@@ -120,6 +121,12 @@ def query_selector(path_obj: Union[dict, list], pattern: Union[str, list], resul
                 if not isinstance(last_path, list):
                     return False
                 last_path = last_path[int(path_name)]
+            elif path_name.find(":") != -1:  # Dict with exact value
+                key, value = path_name.split(":")
+                if (test_path := last_path.get(key)) and test_path == value:
+                    return last_path
+                else:
+                    return False
             else:  # dict
                 if test_path := last_path.get(path_name):
                     last_path = test_path
