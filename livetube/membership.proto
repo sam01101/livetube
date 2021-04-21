@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+message ContinuationCommand {
+  message Entry {
+    message Details {
+      message ChannelDetails {
+        int32 channelType = 1;
+        string channelId = 2;
+      }
+      string targetId = 1;
+      int32 channelType = 2;
+      ChannelDetails channelDetails = 3;
+    }
+    Details details = 12;
+  }
+  Entry entry = 50;
+}
+
+message ContinuationCommandEntry {
+  message Entry {
+    string command = 2;
+    string details = 3;  // ContinuationCommand b64
+    string targetId = 35;
+  }
+  Entry entry = 80226972;
+}

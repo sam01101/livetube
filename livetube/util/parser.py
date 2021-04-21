@@ -5,11 +5,12 @@
     文件:    parser.py
     文件描述: 
 """
-import ast
 import json
+import re
+from ast import literal_eval
+from html.parser import HTMLParser
 
-from .excpetions import HTMLParseError
-from .regex import compile
+from .exceptions import HTMLParseError
 
 
 def parse_for_object(html: str, preceding_regex: str) -> dict:
@@ -23,7 +24,7 @@ def parse_for_object(html: str, preceding_regex: str) -> dict:
     :returns:
         A dict created from parsing the object.
     """
-    regex = compile(preceding_regex)
+    regex = re.compile(preceding_regex)
     result = regex.search(html)
     if not result:
         raise HTMLParseError(f'No matches for regex {preceding_regex}')
@@ -89,6 +90,35 @@ def parse_for_object_from_startpoint(html: str, start_point: int) -> dict:
         return json.loads(full_obj)
     except json.decoder.JSONDecodeError:
         try:
-            return ast.literal_eval(full_obj)
+            return literal_eval(full_obj)
         except ValueError:
             raise HTMLParseError('Could not parse object.')
+
+
+class ScriptTaker(HTMLParser):
+    def __init__(self, html: str):
+        super().__init__()
+        self.scripts = []
+        self.next_is_script = False
+        self.feed(html)
+
+    def error(self, message):
+        pass
+
+    def handle_starttag(self, tag, data):
+        if tag == "script":
+            for key, _ in data:
+                if key == "src":
+                    return
+            self.next_is_script = True
+
+    def handle_data(self, data: str):
+        if self.next_is_script:
+            self.next_is_script = False
+            if data.startswith("if"):
+                return
+            self.scripts.append(data)
+
+    def feed(self, data):
+        self.scripts.clear()
+        super().feed(data)

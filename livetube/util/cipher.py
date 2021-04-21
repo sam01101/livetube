@@ -15,18 +15,18 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
-from .regex import regex_search, compile
-from .excpetions import RegexMatchError
+from .regex import regex_search
+from .exceptions import RegexMatchError
 
 
 class Cipher:
     def __init__(self, js: str):
         self.transform_plan: List[str] = get_transform_plan(js)
-        var_regex = compile(r"^\w+\W")
+        var_regex = re.compile(r"^\w+\W")
         var_match = var_regex.search(self.transform_plan[0])
         if not var_match:
             raise RegexMatchError(
-                caller="__init__", pattern=var_regex.pattern
+                caller="Cipher init", pattern=var_regex.pattern
             )
         var = var_match.group(0)[:-1]
         self.transform_map = get_transform_map(js, var)
@@ -65,7 +65,7 @@ class Cipher:
         ('AJ', 15)
         """
         for pattern in self.js_func_patterns:
-            regex = compile(pattern)
+            regex = re.compile(pattern)
             parse_match = regex.search(js_func)
             if parse_match:
                 fn_name, fn_arg = parse_match.groups()
@@ -94,7 +94,8 @@ def get_initial_function_name(js: str) -> str:
         r'(?P<sig>[a-zA-Z0-9$]+)\s*=\s*function\(\s*a\s*\)\s*{\s*a\s*=\s*a\.split\(\s*""\s*\)',  # noqa: E501
         r'(["\'])signature\1\s*,\s*(?P<sig>[a-zA-Z0-9$]+)\(',
         r"\.sig\|\|(?P<sig>[a-zA-Z0-9$]+)\(",
-        r"yt\.akamaized\.net/\)\s*\|\|\s*.*?\s*[cs]\s*&&\s*[adf]\.set\([^,]+\s*,\s*(?:encodeURIComponent\s*\()?\s*(?P<sig>[a-zA-Z0-9$]+)\(",
+        r"yt\.akamaized\.net/\)\s*\|\|\s*.*?\s*[cs]\s*&&\s*[adf]\.set"
+        r"\([^,]+\s*,\s*(?:encodeURIComponent\s*\()?\s*(?P<sig>[a-zA-Z0-9$]+)\(",
         # noqa: E501
         r"\b[cs]\s*&&\s*[adf]\.set\([^,]+\s*,\s*(?P<sig>[a-zA-Z0-9$]+)\(",  # noqa: E501
         r"\b[a-zA-Z0-9]+\s*&&\s*[a-zA-Z0-9]+\.set\([^,]+\s*,\s*(?P<sig>[a-zA-Z0-9$]+)\(",  # noqa: E501
@@ -103,7 +104,7 @@ def get_initial_function_name(js: str) -> str:
         r"\bc\s*&&\s*[a-zA-Z0-9]+\.set\([^,]+\s*,\s*\([^)]*\)\s*\(\s*(?P<sig>[a-zA-Z0-9$]+)\(",  # noqa: E501
     ]
     for pattern in function_patterns:
-        regex = compile(pattern)
+        regex = re.compile(pattern)
         function_match = regex.search(js)
         if function_match:
             return function_match.group(1)
@@ -152,7 +153,7 @@ def get_transform_object(js: str, var: str) -> List[str]:
     'kT:function(a,b){var c=a[0];a[0]=a[b%a.length];a[b]=c}']
     """
     pattern = r"var %s={(.*?)};" % re.escape(var)
-    regex = compile(pattern, flags=re.DOTALL)
+    regex = re.compile(pattern, flags=re.DOTALL)
     transform_match = regex.search(js)
     if not transform_match:
         raise RegexMatchError(caller="get_transform_object", pattern=pattern)
@@ -239,6 +240,7 @@ def map_functions(js_func: str) -> Callable:
     )
 
     for pattern, fn in mapper:
-        if re.search(pattern, js_func):
+        pattern = re.compile(pattern)
+        if pattern.search(js_func):
             return fn
     raise RegexMatchError(caller="map_functions", pattern="multiple")

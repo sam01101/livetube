@@ -5,36 +5,33 @@
     文件:    js.py
     文件描述: 
 """
-from collections import OrderedDict
 from typing import Union, Optional
 from urllib.parse import quote, urlencode
 
-from .excpetions import RegexMatchError, HTMLParseError
+from .cache import yt_root_url
+from .exceptions import RegexMatchError, HTMLParseError
 from .parser import parse_for_object
 
-js_cache = {
-    "url": "",
-    "data": ""
-}
 
-def initial_data(watch_html: str) -> dict:
-    """Extract the ytInitialData json from the watch_html page.
+def initial_data(scripts: list) -> dict:
+    """Extract the ytInitialData json from the watch_html js.
 
     This mostly contains metadata necessary for rendering the page on-load,
     such as video information, copyright notices, etc.
 
-    :param: watch_html: Html of the watch page
+    :param: scripts: Script of the watch page
     :return:
     """
     patterns = [
         r"window\[['\"]ytInitialData['\"]]\s*=\s*",
         r"ytInitialData\s*=\s*"
     ]
-    for pattern in patterns:
-        try:
-            return parse_for_object(watch_html, pattern)
-        except HTMLParseError:
-            pass
+    for script in scripts:
+        for pattern in patterns:
+            try:
+                return parse_for_object(script, pattern)
+            except HTMLParseError:
+                pass
 
     raise RegexMatchError(caller='initial_data', pattern='initial_data_pattern')
 
@@ -51,15 +48,14 @@ def video_info_url(video_id: str, watch_url: str) -> str:
         :samp:`https://youtube.com/get_video_info` with necessary GET
         parameters.
     """
-    params = OrderedDict(
+    params = dict(
         [
             ("video_id", video_id),
             ("eurl", quote(watch_url)),
-            ("hl", "en_US"),
-            ("cpn", "PInLukK97Gqrbq8W")
+            ("hl", "en_US")
         ]
     )
-    return "https://youtube.com/get_video_info?" + urlencode(params)
+    return "%s/get_video_info?" % yt_root_url + urlencode(params)
 
 
 def dict_search(data: dict, key: str, depth: int = 3):
@@ -77,15 +73,15 @@ def dict_search(data: dict, key: str, depth: int = 3):
                     return result
 
 
-def query_selector(path_obj: Union[dict, list], pattern: Union[str, list], results=None) -> Union[
-    bool, Union[dict, list]]:
+def query_selector(path_obj: Union[dict, list], pattern: Union[str, list], results=None) -> Union[bool,
+                                                                                                  Union[dict, list]]:
     """
     simple jq impl in Python
 
     see https://gist.github.com/sam01101/b35da7ffad74849c2d941429c74a2365
 
 
-    :param results: The total reuslt
+    :param results: The total result
     :param path_obj: The path
     :param pattern: The pattern of the path
     :return: The result if the path is executed successfully or False
