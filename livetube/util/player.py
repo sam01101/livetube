@@ -5,91 +5,73 @@
     文件:    player.py
     文件描述: 
 """
-from .excpetions import HTMLParseError, RegexMatchError
+import json
+import re
+
+from .exceptions import HTMLParseError, RegexMatchError
 from .parser import parse_for_object
-from .regex import compile
 
 
-def js_url(html: str) -> str:
-    """Get the base JavaScript url.
-    Construct the base JavaScript url, which contains the decipher
-    "transforms".
-    :param str html:
-        The html contents of the watch page.
-    """
-    try:
-        base_js = get_ytplayer_config(html)['assets']['js']
-    except (KeyError, RegexMatchError):
-        base_js = get_ytplayer_js(html)
-    return "https://youtube.com" + base_js
+def get_ytplayer_resp(scripts: list) -> dict:
+    """Get the YouTube player response data from the watch html js.
 
+    Extract the ``ytplayer_config``, which is json data embedded within the
+    watch html and serves as the primary source of obtaining the stream
+    manifest data.
 
-def get_ytplayer_js(html: str) -> str:
-    """Get the YouTube player base JavaScript path.
-
-    :param html
-        The html contents of the watch page.
+    :param str scripts:
+        The html script content of the watch page.
     :rtype: str
     :returns:
-        Path to YouTube's base.js file.
+        Substring of the html containing the encoded manifest data.
     """
-    js_url_patterns = [
-        r"(/s/player/[\w\d]+/[\w\d_/.]+/base\.js)"
+    config_patterns = [
+        r"ytInitialPlayerResponse\s*=\s*"
     ]
-    for pattern in js_url_patterns:
-        regex = compile(pattern)
-        function_match = regex.search(html)
-        if function_match:
-            # print("finished regex search, matched: %s" % pattern)
-            yt_player_js = function_match.group(1)
-            return yt_player_js
+    for script in scripts:
+        for pattern in config_patterns:
+            # Try each pattern consecutively if they don't find a match
+            try:
+                return parse_for_object(script, pattern)
+            except HTMLParseError:
+                continue
 
     raise RegexMatchError(
-        caller="get_ytplayer_js",
-        pattern="js_url_patterns"
+        caller="get_ytplayer_resp",
+        pattern="config_patterns, setconfig_patterns"
     )
 
 
-def get_ytplayer_config(html: str) -> dict:
+def get_ytplayer_setconfig(scripts: list) -> dict:
     """Get the YouTube player configuration data from the watch html.
 
     Extract the ``ytplayer_config``, which is json data embedded within the
     watch html and serves as the primary source of obtaining the stream
     manifest data.
 
-    :param str html:
-        The html contents of the watch page.
+    :param str scripts:
+        The html script contents of the watch page.
     :rtype: str
     :returns:
         Substring of the html containing the encoded manifest data.
     """
-    # print("finding initial function name")
-    config_patterns = [
-        r"ytplayer\.config\s*=\s*",
-        r"ytInitialPlayerResponse\s*=\s*"
-    ]
-    for pattern in config_patterns:
-        # Try each pattern consecutively if they don't find a match
-        try:
-            return parse_for_object(html, pattern)
-        except HTMLParseError:
-            continue
-
-    # setConfig() needs to be handled a little differently.
-    # We want to parse the entire argument to setConfig()
-    #  and use then load that as json to find PLAYER_CONFIG
-    #  inside of it.
     setconfig_patterns = [
+        r'ytcfg\.set\(({.+?})\);.+setMessage',
         r"yt\.setConfig\(.*['\"]PLAYER_CONFIG['\"]:\s*"
     ]
-    for pattern in setconfig_patterns:
-        # Try each pattern consecutively if they don't find a match
-        try:
-            return parse_for_object(html, pattern)
-        except HTMLParseError:
-            continue
+    for script in scripts:
+        for pattern in setconfig_patterns:
+            # Try each pattern consecutively if they don't find a match
+            try:
+                regex = re.compile(pattern)
+                result = regex.search(script)
+                if not result:
+                    continue
+                return json.loads(result.group(1))
+            except (HTMLParseError, json.JSONDecodeError):
+                continue
 
     raise RegexMatchError(
-        caller="get_ytplayer_config",
+        caller="get_ytplayer_setconfig",
         pattern="config_patterns, setconfig_patterns"
     )

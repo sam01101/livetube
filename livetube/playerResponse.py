@@ -10,22 +10,26 @@ from enum import Enum
 from typing import Optional, Dict
 from urllib.parse import parse_qsl
 
-from .util.cipher import Cipher
-from .util.excpetions import MembersOnly, RecordingUnavailable, VideoUnavailable, LiveStreamOffline, VideoPrivate, \
-    RegexMatchError, VideoRegionBlocked, PaymentRequired, AccountBanned, HTMLParseError
-from .util.js import query_selector, js_cache
+from util.cache import js_cache_v2
+from .util.exceptions import *
+from .util.js import query_selector
 from .util.regex import regex_search
+from .utils import get_text
 
-
-def extract_string(data: dict):
-    if text := data.get("simpleText"):
-        return text
-    elif flows := data.get("runs"):
-        text = ""
-        for flow in flows:
-            if "<" not in flow['text']:
-                text += flow['text']
-        return text
+error_reasons = (
+    # Passed YoutubeDL check
+    (MembersOnly, "member"),
+    (RecordingUnavailable, 'This live stream recording is not available.'),
+    (VideoRegionBlocked, "Video unavailable", 'The uploader has not made this video available in your country.'),
+    (AccountBanned, "Video unavailable", 'This video is no longer available because '
+                                         'the YouTube account associated with this video has been terminated.'),
+    (VideoPrivate, "", "This video is private."),
+    (VideoPrivate, "private video"),
+    # Check streamData first
+    (LoginRequired, 'Sign in to confirm your age', 'This video may be inappropriate for some users.'),
+    (PaymentRequired, 'This video requires payment to watch.'),
+    (VideoRegionBlocked, 'Video unavailable', 'The uploader has not made this video available in your country.'),
+)
 
 
 class latencyType(Enum):
@@ -53,15 +57,15 @@ class responseContext:
                         elif param['key'] == "is_viewed_live":
                             self.is_viewed_live = param['value'] == "1"
 
+    def update(self, data):
+        self.__init__(data)
 
-# last_reason
 
 class playabilityStatus:
     status: str
     reason: str
     playableInEmbed: bool
     subreason: Optional[str] = None
-    last_reason: Optional[str] = None
     pollDelayMs: int = 5000
     isCountDown = False
     isPremiere: bool = False
@@ -71,15 +75,41 @@ class playabilityStatus:
         self.status = data.get("status", "UNPLAYABLE")
         self.reason = data.get("reason", "")
         self.playableInEmbed = data.get('playableInEmbed', False)
-        if subreason := query_selector(data, "errorScreen/playerErrorMessageRenderer/subreason"):
-            self.subreason = extract_string(subreason)
+        if sub_reason := query_selector(data, "errorScreen/playerErrorMessageRenderer/subreason"):
+            self.subreason = get_text(sub_reason)
         if poll_ms := query_selector(data, "liveStreamability/liveStreamabilityRenderer/pollDelayMs"):
             self.pollDelayMs = int(poll_ms)
         if livestream_offline := query_selector(data,
-                                                "liveStreamability/liveStreamabilityRenderer/offlineSlate/liveStreamOfflineSlateRenderer"):
+                                                "liveStreamability/liveStreamabilityRenderer/"
+                                                "offlineSlate/liveStreamOfflineSlateRenderer"):
             self.isCountDown = livestream_offline.get("canShowCountdown", False)
             if scheduled_start_time := livestream_offline.get("scheduledStartTime"):
                 self.scheduled_start_time = int(scheduled_start_time)
+
+    def update(self, data: dict):
+        for key in (
+                "status",
+                "reason",
+                "playableInEmbed",
+                "errorScreen",
+                "liveStreamability"
+        ):
+            if value := data.get(key):
+                if key == "errorScreen":
+                    if sub_reason := query_selector(value, "playerErrorMessageRenderer/subreason"):
+                        self.subreason = get_text(sub_reason)
+                elif key == "liveStreamability":
+                    if not (value := value.get("liveStreamabilityRenderer")):
+                        return
+                    if poll_ms := query_selector(value, "pollDelayMs"):
+                        self.pollDelayMs = int(poll_ms)
+                    if livestream_offline := query_selector(value, "offlineSlate/liveStreamOfflineSlateRenderer"):
+                        if update := livestream_offline.get("canShowCountdown") is not None:
+                            self.isCountDown = update
+                        if scheduled_start_time := livestream_offline.get("scheduledStartTime"):
+                            self.scheduled_start_time = int(scheduled_start_time)
+                else:
+                    setattr(self, key, value)
 
 
 class streamingData:
@@ -90,24 +120,71 @@ class streamingData:
     audios: Dict[str, dict]
     videos: Dict[str, dict]
 
-    def __init__(self, data: dict, js: str):
-        if data.get('expiresInSeconds'):
-            cipher: Optional[Cipher] = None
-            self.expiresInSeconds = int(data.get('expiresInSeconds'))
-            self.hlsManifestUrl = data.get('hlsManifestUrl')
-            self.dashManifestUrl = data.get('dashManifestUrl')
-            adaptiveFormats: list = data.get("adaptiveFormats", [])
+    def __init__(self, data: dict, js_url: str):
+        self.expiresInSeconds = int(data.get('expiresInSeconds'))
+        self.hlsManifestUrl = data.get('hlsManifestUrl')
+        self.dashManifestUrl = data.get('dashManifestUrl')
+        adaptiveFormats: list = data.get("adaptiveFormats", [])
+        if adaptiveFormats:
             self.audios = {}
             self.videos = {}
             for formats in adaptiveFormats:
                 if sig_raw := formats.get('signatureCipher'):
-                    if not cipher and not js_cache['data']:
-                        raise HTMLParseError("js not found, consider fetching video again.")
-                    elif not js:
-                        js = js_cache['data']
-                    cipher = Cipher(js=js)
+                    cipher = js_cache_v2[js_url]
                     if not cipher:
-                        raise HTMLParseError("Cipher parse failed")
+                        raise HTMLParseError("Cipher not found.")
+                    sig_data = parse_qsl(sig_raw)
+                    sig_key = next(data for key, data in sig_data if key == "s")
+                    sig_type = next(data for key, data in sig_data if key == "sp")
+                    sig_url = next(data for key, data in sig_data if key == "url")
+                    signature = cipher.get_signature(ciphered_signature=sig_key)
+                    formats['url'] = f"{sig_url}&{sig_type}={signature}"
+                    del formats['signatureCipher']
+
+                if "audio" in formats['mimeType']:
+                    self.audios[formats['itag']] = formats
+                elif "mp4" in formats['mimeType']:
+                    self.videos[formats['itag']] = formats
+            # Get best format
+            bestBitrate: int = 0
+            best: Optional[dict] = None
+            for _, formats in self.audios.items():
+                if int(formats['bitrate']) > bestBitrate and formats['mimeType'].find("mp4") != -1:
+                    bestBitrate = int(formats['bitrate'])
+                    best = self.audios[formats['itag']]
+            self.audios['best'] = best if best else None
+            bestW, bestH, bestFPS = 0, 0, 0
+            best: Optional[dict] = None
+            for _, formats in self.videos.items():
+                w, h, fps = int(formats.get("width", 0)), int(formats.get("height", 0)), int(formats.get("fps", 0))
+                if w >= bestW and h >= bestH and fps >= bestFPS:
+                    bestW, bestH, bestFPS = w, h, fps
+                    best = self.videos[formats['itag']]
+            self.videos['best'] = best if best else None
+            # Get timestamp of expire time
+            try:
+                self.expireTimestamp = int(regex_search(r"/expire/(\d+)/", self.videos['best']['url'], 1))
+            except (RegexMatchError, KeyError):
+                self.expireTimestamp = int(time.time()) + self.expiresInSeconds + 120
+
+    def update(self, data: dict, js_url: str):
+        if update := data.get("expiresInSeconds"):
+            self.expiresInSeconds = update
+
+        if update := data.get("hlsManifestUrl"):
+            self.hlsManifestUrl = update
+
+        if update := data.get("dashManifestUrl"):
+            self.dashManifestUrl = update
+
+        if update := data.get("adaptiveFormats"):
+            self.audios = {}
+            self.videos = {}
+            for formats in update:
+                if sig_raw := formats.get('signatureCipher'):
+                    cipher = js_cache_v2[js_url]
+                    if not cipher:
+                        raise HTMLParseError("Cipher not found.")
                     sig_data = parse_qsl(sig_raw)
                     sig_key = next(data for key, data in sig_data if key == "s")
                     sig_type = next(data for key, data in sig_data if key == "sp")
@@ -157,19 +234,21 @@ class videoDetails:
     isUnlisted: bool = False
     viewCount: int
     private: bool
-    liveViewCount: Optional[int]
-    liveShortViewCount: Optional[int]
-    startedSince: Optional[str]
-    shortLikeCount: Optional[str]
-    shortDislikeCount: Optional[str]
+    liveViewCount: Optional[int] = None
+    liveShortViewCount: Optional[int] = None
+    startedSince: Optional[str] = None
+    shortLikeCount: str
+    shortDislikeCount: str
     isLowLatencyLiveStream: Optional[bool]
     latencyClass: latencyType
     latencyText: Optional[str]
+    broadcastDetails: Optional[dict] = {}
 
-    def __init__(self, data: Optional[dict] = None, extra_data: Optional[dict] = None):
+    def __init__(self, data: Optional[dict] = None, extra_data: dict = None):
         # Basic info
+        if extra_data is None:
+            extra_data = {}
         if data:
-            self.isLive = data.get("isLive", False)
             self.isLiveStream = data.get('isLiveContent', False)
             self.video_id = data.get('videoId', "")
             self.channel_id = data.get('channelId', "")
@@ -188,91 +267,81 @@ class videoDetails:
                 "LOW": "低延迟(~4-6s) [不支持 4K]",
                 "ULTRALOW": "超低延迟(~1-3s) [不支持字幕, 1440p 和 4K]"
             }
-            self.latencyText = types.get(self.latencyClass.value, "无法显示")
-        self.title = extra_data['playerMicroformatRenderer']['title']['simpleText'] if extra_data else data['title']
-        self.lengthSeconds = int(
-            (extra_data['playerMicroformatRenderer'] if extra_data else data).get("lengthSeconds", 0))
-        thumbnails = (extra_data['playerMicroformatRenderer'] if extra_data else data)['thumbnail']['thumbnails']
-        self.thumbnail = thumbnails[len(thumbnails) - 1]['url']
+            self.latencyText = types.get(str(self.latencyClass.value), "无法显示")
+        self.update(extra_data)
+
+    def update(self, extra_data: dict):
+        extra_data = extra_data.get("playerMicroformatRenderer", extra_data)
+        if update := extra_data.get("title"):
+            self.title = update
+        if update := extra_data.get("lengthSeconds"):
+            self.lengthSeconds = int(update)
+        if update := extra_data.get("thumbnail", {}).get("thumbnails"):
+            self.thumbnail = update[len(update) - 1]['url']
         # Extra basic info
-        if extra_data:
-            self.isUnlisted = extra_data['playerMicroformatRenderer'].get('isUnlisted', False)
+        if update := extra_data.get("isUnlisted") is not None:
+            self.isUnlisted = update
         # View count info
-        self.viewCount = int((extra_data['playerMicroformatRenderer'] if extra_data else data).get('viewCount'), 0)
-        self.liveViewCount = None
-        self.liveShortViewCount = None
-        self.startedSince = None
-        # Like/Dislike
-        self.shortLikeCount = None
-        self.shortDislikeCount = None
+        if update := extra_data.get("viewCount"):
+            self.viewCount = update
+        if update := extra_data.get("liveBroadcastDetails"):
+            self.broadcastDetails = update
+            self.isLive = self.broadcastDetails['isLiveNow']
 
 
 class playerResponse:
+    js_url: str
     responseContext: responseContext
     playabilityStatus: playabilityStatus
     videoDetails: Optional[videoDetails] = None
     streamData: Optional[streamingData] = None
 
-    def __init__(self, player_response: dict, js: str):
+    def __init__(self, player_response: dict, js_url: str):
+        self.js_url = js_url
         self.responseContext = responseContext(player_response.get('responseContext'))
         self.playabilityStatus = playabilityStatus(player_response.get('playabilityStatus'))
-        if player_response.get('videoDetails'):
-            self.videoDetails = videoDetails(player_response.get('videoDetails'), player_response.get('microformat'))
-            self.videoDetails.isLive = self.playabilityStatus.status == "OK" and self.playabilityStatus.reason == ""
-        if player_response.get('streamingData'):
-            self.streamData = streamingData(player_response.get('streamingData'), js)
+        if update := player_response.get('videoDetails'):
+            self.videoDetails = videoDetails(update, player_response['microformat'])
+        if update := player_response.get('streamingData'):
+            self.streamData = streamingData(update, js_url)
 
     def raise_for_status(self):
-        status, reason, subreason = self.playabilityStatus.status, self.playabilityStatus.reason, self.playabilityStatus.subreason
-        if status == 'UNPLAYABLE':
-            if reason.find("member") != -1:
-                if reason.find("higher") != -1:
-                    raise MembersOnly(reason)
-                else:
-                    raise MembersOnly
-            elif reason == 'This live stream recording is not available.':
-                raise RecordingUnavailable
+        status, reason, sub_reason = (self.playabilityStatus.status, self.playabilityStatus.reason,
+                                      self.playabilityStatus.subreason)
+        # reason (sub-reason) > status
+        if self.streamData and status not in ('UNPLAYABLE', "LIVE_STREAM_OFFLINE"):  # Skip if there's available stream
+            return
+        for error in error_reasons:
+            if (
+                    len(error) == 2 and reason.lower().find(error[1].lower()) != -1 or  # reason only
+                    len(error) == 3 and sub_reason.lower().find(error[2].lower()) != -1 and  # with sub-reason
+                    len(error) == 3 and reason != "" and reason.lower().find(error[1].lower()) == -1
+            ):
+                raise error[0]
+        if reason.find("member") != -1:  # Members
+            if reason.find("higher") != -1:
+                raise MembersOnly(reason)
             else:
-                if reason == 'Video unavailable':
-                    if subreason == 'The uploader has not made this video available in your country.':
-                        raise VideoRegionBlocked
-                    elif subreason == ('This video is no longer available '
-                                       'because the YouTube account associated with this video has been terminated.'):
-                        raise AccountBanned
-                elif reason == 'This video requires payment to watch.':
-                    raise PaymentRequired
-                raise VideoUnavailable
-        elif status == "ERROR":
-            if subreason == "This video is private.":
-                raise VideoPrivate
-            raise VideoUnavailable
-        elif status == 'LOGIN_REQUIRED':
-            if reason.find("private video") != -1:
-                raise VideoPrivate
-            raise VideoUnavailable
-        elif status == 'LIVE_STREAM_OFFLINE':
+                raise MembersOnly
+        # status
+        if status == 'LIVE_STREAM_OFFLINE':
             if 'moment' not in reason and not self.playabilityStatus.scheduled_start_time:
                 raise LiveStreamOffline
         elif status != "OK":
             raise VideoUnavailable
 
-    def update(self, update_items: dict, js: str):
-        if update_items.get('playabilityStatus'):
-            new = playabilityStatus(update_items['playabilityStatus'])
-            if self.videoDetails:
-                self.videoDetails.isLive = new.status == "OK" and new.reason == ""
-            if new.reason != self.playabilityStatus.reason:
-                self.playabilityStatus.last_reason = self.playabilityStatus.reason
-            self.playabilityStatus.__dict__.update(new.__dict__)
-        if update_items.get('responseContext'):
-            new = responseContext(update_items['responseContext'])
-            self.responseContext.__dict__.update(new.__dict__)
+    def update(self, update_items: dict):
+        if update := update_items.get('playabilityStatus'):
+            self.playabilityStatus.update(update)
+        if update := update_items.get('responseContext'):
+            self.responseContext.update(update)
         if update_items.get('streamingData'):
-            new = streamingData(update_items['streamingData'], js)
             if self.streamData:
-                self.streamData.__dict__.update(new.__dict__)
+                self.streamData.update(update, self.js_url)
             else:
-                self.streamData = new
-        if update_items.get("microformat"):
-            new = videoDetails(None, update_items['microformat'])
-            self.videoDetails.__dict__.update(new.__dict__)
+                self.streamData = streamingData(update_items['streamingData'], self.js_url)
+        if update := update_items.get("microformat"):
+            if self.videoDetails:
+                self.videoDetails.update(update)
+            else:
+                self.videoDetails = videoDetails(update_items.get("videoDetails"), update_items['microformat'])

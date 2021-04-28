@@ -2,7 +2,7 @@
     livetube - A API for youtube streaming
     作者: Sam
     创建日期: 2020/12/18 13:15
-    文件:    excpetions.py
+    文件:    exceptions.py
     文件描述: 
 """
 from re import Pattern
@@ -45,10 +45,6 @@ class RegexMatchError(ExtractError):
         self.pattern = pattern
 
 
-class LiveStreamError(ExtractError):
-    """Video is a live stream."""
-
-
 class LiveStreamOffline(LivetubeError):
     """Live stream offline."""
 
@@ -62,7 +58,7 @@ class PaymentRequired(LivetubeError):
 
 
 class VideoPrivate(ExtractError):
-    pass
+    """Video is private"""
 
 
 class RecordingUnavailable(ExtractError):
@@ -78,10 +74,13 @@ class MembersOnly(LivetubeError):
     """
 
 
+class LoginRequired(LivetubeError):
+    """This video needs to login before parsing"""
+
+
 class AccountBanned(LivetubeError):
     """The youtube account associated with the video has been banned"""
 
 
 class VideoRegionBlocked(ExtractError):
-    """Keep for further update"""
-    pass
+    """Reversed"""

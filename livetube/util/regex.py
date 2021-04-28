@@ -5,26 +5,12 @@
     文件:    regex.py
     文件描述: 
 """
-from typing import Optional
-from .excpetions import RegexMatchError
 import re
-from re import Pattern
 
-compile_cache = {}
-
-
-# noinspection PyShadowingBuiltins
-def compile(pattren: str, **kwargs) -> Pattern:
-    """Compile a regular expression pattern, returning a Pattern object."""
-    if compile_cache.get(pattren):
-        return compile_cache[pattren]
-    else:
-        cache = re.compile(pattren, **kwargs)
-        compile_cache[pattren] = cache
-        return cache
+from .exceptions import RegexMatchError
 
 
-def regex_search(pattern: str, string: str, group: int) -> Optional[str]:
+def regex_search(pattern: str, string: str, group: int) -> str:
     """Shortcut method to search a string for a given pattern.
 
     :param str pattern:
@@ -38,7 +24,7 @@ def regex_search(pattern: str, string: str, group: int) -> Optional[str]:
     :returns:
         Substring pattern matches or None if not found.
     """
-    regex = compile(pattern)
+    regex = re.compile(pattern)
     results = regex.search(string)
     if not results:
         raise RegexMatchError(caller="regex_search", pattern=pattern)
