@@ -65,7 +65,7 @@ class playabilityStatus:
     status: str
     reason: str
     playableInEmbed: bool
-    subreason: Optional[str] = None
+    subreason: str = ""
     pollDelayMs: int = 5000
     isCountDown = False
     isPremiere: bool = False
@@ -287,6 +287,7 @@ class videoDetails:
         if update := extra_data.get("liveBroadcastDetails"):
             self.broadcastDetails = update
             self.isLive = self.broadcastDetails['isLiveNow']
+            # Format of startTimestamp / endTimeStamp : "%Y-%m-%dT%H:%M:%S%z"
 
 
 class playerResponse:
@@ -307,7 +308,7 @@ class playerResponse:
 
     def raise_for_status(self):
         status, reason, sub_reason = (self.playabilityStatus.status, self.playabilityStatus.reason,
-                                      self.playabilityStatus.subreason)
+                                      self.playabilityStatus.subreason or "")
         # reason (sub-reason) > status
         if self.streamData and status not in ('UNPLAYABLE', "LIVE_STREAM_OFFLINE"):  # Skip if there's available stream
             return
