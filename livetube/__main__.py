@@ -14,7 +14,7 @@ from asyncio import AbstractEventLoop
 # Parsing
 import re
 from base64 import b64encode, b64decode
-from typing import Optional, Dict, Union
+from typing import Optional, Dict, Union, List
 from urllib.parse import parse_qsl, quote, unquote, quote_plus
 from util.player import get_ytplayer_resp
 from membership_pb3 import ContinuationCommand, ContinuationCommandEntry
@@ -538,7 +538,7 @@ class Community:
         elif images_attach := attachment.get("postMultiImageRenderer"):
             images_url = []
             for image_attach in images_attach['images']:
-                images_url.append(self._get_image_from_elem(image_attach['backstageImageRenderer']['thumbnails']))
+                images_url.append(self._get_image_from_elem(image_attach['backstageImageRenderer']['image']))
             image = Post.Attachment.Image(True, images_url)
             attach = Post.Attachment("image", image)
         elif poll_attach := attachment.get("pollRenderer"):
@@ -572,7 +572,7 @@ class Community:
             author,
             get_text(post_data['publishedTimeText']),
             get_text(post_data['voteCount']),
-            get_text(post_data['contentText']),
+            get_text(post_data['contentText']) if post_data['contentText'] else "",
             attach,
             (post_data.get('sponsorsOnlyBadge') is not None)
         )
@@ -651,8 +651,13 @@ class Community:
             resp_json = initial_data(html_js)
             return resp_json
 
-    async def fetch(self):
-        """Fetch community posts"""
+    async def fetch(self) -> List[Post]:
+        """
+        Fetch community posts
+
+        :raise NetworkError: Fetching problems
+        :return: A list of Posts
+        """
         # Fallback to html if no api key
         js_data = await (self._api_fetch() if yt_internal_api.key else self._html_fetch())
         self._update_subscriber_count(js_data)
