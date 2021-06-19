@@ -204,14 +204,18 @@ class Video:
                 setattr(self.player_response.videoDetails, button_type, count_text)
             elif updateDateTextAction := action.get("updateDateTextAction"):
                 displayText = get_text(updateDateTextAction['dateText'])
-                if not self.display_chinese:
-                    self.player_response.videoDetails.startedSince = displayText
-                    continue
                 for pattern, name in time_map.items():
                     try:
+                        stream_time = regex_search(r"Started streaming on (.+)", displayText, 1)
+                        self.player_response.videoDetails.startedSince = stream_time
+                        continue
+                    except RegexMatchError:
+                        pass
+                    try:
                         stream_time = int(regex_search(r"(\d+) " + pattern, displayText, 1))
-                        self.player_response.videoDetails.startedSince = (f"{stream_time} {name} "
-                                                                          f"{'前' if self.display_chinese else 'ago'}")
+                        text = (f"{stream_time} {name if self.display_chinese else pattern} "
+                                f"{'前' if self.display_chinese else 'ago'}")
+                        self.player_response.videoDetails.startedSince = text
                         break
                     except RegexMatchError:
                         continue
