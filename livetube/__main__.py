@@ -210,7 +210,8 @@ class Video:
                 for pattern, name in time_map.items():
                     try:
                         stream_time = int(regex_search(r"(\d+) " + pattern, displayText, 1))
-                        self.player_response.videoDetails.startedSince = f"{stream_time} {name}前"
+                        self.player_response.videoDetails.startedSince = (f"{stream_time} {name} "
+                                                                          f"{'前' if self.display_chinese else 'ago'}")
                         break
                     except RegexMatchError:
                         continue
