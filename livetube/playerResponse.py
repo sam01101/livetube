@@ -68,7 +68,7 @@ class playabilityStatus:
     subreason: str = ""
     pollDelayMs: int = 5000
     isCountDown = False
-    isPremiere: bool = False
+    isPremiere = False
     scheduled_start_time: Optional[int] = None
 
     def __init__(self, data: dict):
@@ -273,7 +273,7 @@ class videoDetails:
     def update(self, extra_data: dict):
         extra_data = extra_data.get("playerMicroformatRenderer", extra_data)
         if update := extra_data.get("title"):
-            self.title = update
+            self.title = get_text(update)
         if update := extra_data.get("lengthSeconds"):
             self.lengthSeconds = int(update)
         if update := extra_data.get("thumbnail", {}).get("thumbnails"):
