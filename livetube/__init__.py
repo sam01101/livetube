@@ -18,3 +18,6 @@ try:
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 except ModuleNotFoundError:
     pass
+
+from livetube.__main__ import Video, Membership, Community
+from livetube.util.exceptions import *
