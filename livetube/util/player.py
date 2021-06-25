@@ -8,8 +8,8 @@
 import json
 import re
 
-from .exceptions import HTMLParseError, RegexMatchError
-from .parser import parse_for_object
+from livetube.util.exceptions import HTMLParseError, RegexMatchError
+from livetube.util.parser import parse_for_object
 
 
 def get_ytplayer_resp(scripts: list) -> dict:

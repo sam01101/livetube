@@ -8,9 +8,9 @@
 from typing import Union, Optional
 from urllib.parse import quote, urlencode
 
-from .cache import yt_root_url
-from .exceptions import RegexMatchError, HTMLParseError
-from .parser import parse_for_object
+from livetube.util.cache import yt_root_url
+from livetube.util.exceptions import RegexMatchError, HTMLParseError
+from livetube.util.parser import parse_for_object
 
 
 def initial_data(scripts: list) -> dict:

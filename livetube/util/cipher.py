@@ -15,8 +15,8 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
-from .regex import regex_search
-from .exceptions import RegexMatchError
+from livetube.util.regex import regex_search
+from livetube.util.exceptions import RegexMatchError
 
 
 class Cipher:

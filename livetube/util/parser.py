@@ -10,7 +10,7 @@ import re
 from ast import literal_eval
 from html.parser import HTMLParser
 
-from .exceptions import HTMLParseError
+from livetube.util.exceptions import HTMLParseError
 
 
 def parse_for_object(html: str, preceding_regex: str) -> dict:

@@ -10,11 +10,11 @@ from enum import Enum
 from typing import Optional, Dict
 from urllib.parse import parse_qsl
 
-from util.cache import js_cache_v2
-from .util.exceptions import *
-from .util.js import query_selector
-from .util.regex import regex_search
-from .utils import get_text
+from livetube.util.cache import js_cache_v2
+from livetube.util.exceptions import *
+from livetube.util.js import query_selector
+from livetube.util.regex import regex_search
+from livetube.utils import get_text
 
 error_reasons = (
     # Passed YoutubeDL check
@@ -28,7 +28,6 @@ error_reasons = (
     # Check streamData first
     (LoginRequired, 'Sign in to confirm your age', 'This video may be inappropriate for some users.'),
     (PaymentRequired, 'This video requires payment to watch.'),
-    (VideoRegionBlocked, 'Video unavailable', 'The uploader has not made this video available in your country.'),
 )
 
 
@@ -287,7 +286,7 @@ class videoDetails:
         if update := extra_data.get("liveBroadcastDetails"):
             self.broadcastDetails = update
             self.isLive = self.broadcastDetails['isLiveNow']
-            # Format of startTimestamp / endTimeStamp : "%Y-%m-%dT%H:%M:%S%z"
+            # Format of startTimestamp / endTimestamp : "%Y-%m-%dT%H:%M:%S%z"
 
 
 class playerResponse:

@@ -16,7 +16,7 @@ from urllib.parse import unquote
 
 import aiohttp
 
-from .util.exceptions import NetworkError
+from livetube.util.exceptions import NetworkError
 
 logger = logging.getLogger("livetube")
 

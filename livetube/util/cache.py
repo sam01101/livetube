@@ -6,6 +6,7 @@
     文件描述: Cached data for reuse
 """
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Union, Any, Optional, Dict
 
 import aiohttp
@@ -93,6 +94,7 @@ class JSCache:
                     pass
             self.cache[key] = value
 
+    @lru_cache(maxsize=50)
     def __getitem__(self, item):
         return self.cache.get(item)
 

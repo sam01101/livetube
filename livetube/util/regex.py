@@ -7,7 +7,7 @@
 """
 import re
 
-from .exceptions import RegexMatchError
+from livetube.util.exceptions import RegexMatchError
 
 
 def regex_search(pattern: str, string: str, group: int) -> str:

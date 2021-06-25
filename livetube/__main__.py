@@ -16,29 +16,30 @@ import re
 from base64 import b64encode, b64decode
 from typing import Optional, Dict, Union, List
 from urllib.parse import parse_qsl, quote, unquote, quote_plus
-from util.player import get_ytplayer_resp
-from membership_pb3 import ContinuationCommand, ContinuationCommandEntry
-from util.parser import ScriptTaker
+from livetube.util.player import get_ytplayer_resp
+from livetube.membership_pb3 import ContinuationCommand, ContinuationCommandEntry
+from livetube.util.parser import ScriptTaker
 
 # Networking
 import aiohttp
 import yarl
 
 # Cache for YouTube
-from util.cipher import Cipher
-from util.cache import shared_tcp_pool, js_cache_v2, yt_internal_api, get_yt_client_info, default_header, yt_root_url
+from livetube.util.cipher import Cipher
+from livetube.util.cache import (shared_tcp_pool, js_cache_v2, yt_internal_api,
+                                 get_yt_client_info, default_header, yt_root_url)
 
 # Models
-from .memberShips import Member
-from .communityPosts import Post, SharedPost
-from .playerResponse import playerResponse
+from livetube.memberShips import Member
+from livetube.communityPosts import Post, SharedPost
+from livetube.playerResponse import playerResponse
 
 # Utils
-from .util import player
-from .util.exceptions import RegexMatchError, NetworkError, HTMLParseError, ExtractError
-from .util.js import initial_data, video_info_url, query_selector, dict_search
-from .util.regex import regex_search
-from .utils import time_map, get_text, string_to_int, http_request, logger, calculate_SNAPPISH
+from livetube.util import player
+from livetube.util.exceptions import RegexMatchError, NetworkError, HTMLParseError, ExtractError
+from livetube.util.js import initial_data, video_info_url, query_selector, dict_search
+from livetube.util.regex import regex_search
+from livetube.utils import time_map, get_text, string_to_int, http_request, logger, calculate_SNAPPISH
 
 image_regex = re.compile(r"(yt3\.ggpht\.com/.+?)=.+")
 
@@ -456,7 +457,7 @@ class Community:
 
         # Channel ID
         if channel_id.startswith("http"):
-            channel_id = regex_search(r"(?:v=|\/)([0-9A-Za-z_-]{11}).*", channel_id, group=1)
+            channel_id = regex_search(r"(?:v=|\/)(UC[\w-]{21}[AQgw]).*", channel_id, group=1)
         else:
             if not (match := re.match(r"(UC[\w-]{21}[AQgw])", channel_id)):
                 raise ExtractError("Invalid channel id")
@@ -809,16 +810,16 @@ class Membership:
                 self.error("Expected page is memberships and purchases")
                 raise ExtractError
             if items := query_selector(item_selection, items_path):
+                has_inactive = False
                 for root_item in items:
                     root_item = root_item['contents']
                     item_name = get_text(query_selector(root_item, item_name_path))
                     if item_name == "Memberships":
                         return root_item
-                for root_item in items:  # Inactive only
-                    root_item = root_item['contents']
-                    item_name = get_text(query_selector(root_item, item_name_path))
-                    if item_name == "Inactive Memberships":
-                        return root_item
+                    elif item_name == "Inactive Memberships":
+                        has_inactive = True
+                if has_inactive:
+                    return root_item
                 # There's no membership available (Both type)
                 self.info("There's no membership available")
                 return {}
