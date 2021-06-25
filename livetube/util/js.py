@@ -69,7 +69,8 @@ def dict_search(data: dict, key: str, depth: int = 3):
     if depth > 0:
         for keys in data_keys:
             if isinstance(data[keys], dict):
-                if result := dict_search(data[keys], key, depth - 1):
+                result = dict_search(data[keys], key, depth - 1)
+                if result:
                     return result
 
 
@@ -103,7 +104,8 @@ def query_selector(path_obj: Union[dict, list], pattern: Union[str, list], resul
                     return False
                 last_path: list
                 for test_num in range(len(last_path)):
-                    if result := query_selector(last_path[test_num], pattern_spilt[level + 1:], results):
+                    result = query_selector(last_path[test_num], pattern_spilt[level + 1:], results)
+                    if result:
                         if id(results) == id(result):
                             continue
                         if isinstance(result, list):
@@ -119,12 +121,14 @@ def query_selector(path_obj: Union[dict, list], pattern: Union[str, list], resul
                 last_path = last_path[int(path_name)]
             elif path_name.find(":") != -1:  # Dict with exact value
                 key, value = path_name.split(":")
-                if (test_path := last_path.get(key)) and test_path == value:
+                test_path = last_path.get(key)
+                if test_path and test_path == value:
                     return last_path
                 else:
                     return False
             else:  # dict
-                if test_path := last_path.get(path_name):
+                test_path = last_path.get(path_name)
+                if test_path:
                     last_path = test_path
                 else:
                     return False

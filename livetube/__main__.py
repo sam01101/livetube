@@ -73,7 +73,8 @@ class Video:
         if video_id.startswith("http"):
             video_id = regex_search(r"(?:v=|\/)([0-9A-Za-z_-]{11}).*", video_id, group=1)
         else:
-            if not (match := re.match(r"([0-9A-Za-z_-]{11})", video_id)):
+            match = re.match(r"([0-9A-Za-z_-]{11})", video_id)
+            if not match:
                 raise ExtractError("Invalid video id")
             else:
                 video_id = match.group(1)
@@ -164,9 +165,11 @@ class Video:
                     self.error("Failed to query video search")
                     raise NetworkError
                 resp_json = await response.json()
-        if test := query_selector(resp_json, pattern):
+        test = query_selector(resp_json, pattern)
+        if test:
             video_info = test[0]
-            if thumbnail := video_info.get("richThumbnail"):
+            thumbnail = video_info.get("richThumbnail")
+            if thumbnail:
                 return thumbnail['movingThumbnailRenderer']['movingThumbnailDetails']['thumbnails'][0]['url']
             else:
                 self.info("No preview animation thumbnail")
@@ -190,13 +193,20 @@ class Video:
     # metadata update
     def _update_actions(self, actions: list):
         for action in actions:  # type: dict
-            if info := query_selector(action, "updateViewershipAction/viewCount/videoViewCountRenderer"):
-                if viewCount := info.get("viewCount"):
+            info = query_selector(action, "updateViewershipAction/viewCount/videoViewCountRenderer")
+            updateToggleButtonTextAction, updateDateTextAction, updateTitleAction = (
+                action.get("updateToggleButtonTextAction"), action.get("updateDateTextAction"),
+                action.get("updateTitleAction"),
+            )
+            if info:
+                viewCount = info.get("viewCount")
+                if viewCount:
                     self.player_response.videoDetails.liveViewCount = int(
                         ''.join(filter(str.isdigit, get_text(viewCount))))
-                if shortViewCount := info.get("extraShortViewCount"):
+                shortViewCount = info.get("extraShortViewCount")
+                if shortViewCount:
                     self.player_response.videoDetails.liveShortViewCount = get_text(shortViewCount)
-            elif updateToggleButtonTextAction := action.get("updateToggleButtonTextAction"):
+            elif updateToggleButtonTextAction:
                 """Like/Dislike button update"""
                 buttonId = updateToggleButtonTextAction['buttonId']
                 button_type = "shortLikeCount" if buttonId == "TOGGLE_BUTTON_ID_TYPE_LIKE" else "shortDislikeCount"
@@ -204,7 +214,7 @@ class Video:
                 if count_text.lower() in ("like", "dislike"):
                     count_text = "?"
                 setattr(self.player_response.videoDetails, button_type, count_text)
-            elif updateDateTextAction := action.get("updateDateTextAction"):
+            elif updateDateTextAction:
                 displayText = get_text(updateDateTextAction['dateText'])
                 for pattern, name in time_map.items():
                     try:
@@ -221,7 +231,7 @@ class Video:
                         break
                     except RegexMatchError:
                         continue
-            elif updateTitleAction := action.get("updateTitleAction"):
+            elif updateTitleAction:
                 title: str = get_text(updateTitleAction['title'])
                 if self.player_response.videoDetails.title != title:
                     self.player_response.videoDetails.title = title
@@ -242,12 +252,14 @@ class Video:
                 self.error("Failed to fetch metadata")
                 raise NetworkError
             resp_json: dict = await response.json()
-            if ((continue_id := query_selector(resp_json, "continuation/timedContinuationData/continuation"))
-                    and continue_id != self._continue_id):
+            continue_id = query_selector(resp_json, "continuation/timedContinuationData/continuation")
+            if continue_id and continue_id != self._continue_id:
                 self._continue_id = continue_id
-            if update := resp_json.get('responseContext'):
+            update = resp_json.get('responseContext')
+            if update:
                 self.player_response.responseContext.update(update)
-            if actions := resp_json.get("actions"):
+            actions = resp_json.get("actions")
+            if actions:
                 self._update_actions(actions)
 
     async def fetch_heartbeat(self):
@@ -305,7 +317,8 @@ class Video:
             if response.content_type == "text/html":
                 self.error("Failed to download player")
                 raise NetworkError
-            if _player := self.player_response:
+            _player = self.player_response
+            if _player:
                 await self._check_cipher()
                 _player.update(await response.json())
 
@@ -358,7 +371,8 @@ class Video:
         pattern = ("contents/twoColumnWatchNextResults/results/results/contents/"
                    "?/videoPrimaryInfoRenderer/badges/0/metadataBadgeRenderer/label")
 
-        if video_type := query_selector(_initial_data, pattern):  # type: list
+        video_type = query_selector(_initial_data, pattern)
+        if video_type:
             video_tag: str = video_type[0]
             if video_tag.find("Member") != -1:
                 self.video_type = "Member"
@@ -387,7 +401,8 @@ class Video:
     def _add_like_count(self, _initial_data: dict):
         button_path = ("contents/twoColumnWatchNextResults/results/results/contents/?/videoPrimaryInfoRenderer/"
                        "videoActions/menuRenderer/topLevelButtons/?/toggleButtonRenderer")
-        if query := query_selector(_initial_data, button_path):
+        query = query_selector(_initial_data, button_path)
+        if query:
             for raw_data in query:
                 buttonId = raw_data['toggleButtonSupportedData']['toggleButtonIdData']['id']
                 button_type = "shortLikeCount" if buttonId == "TOGGLE_BUTTON_ID_TYPE_LIKE" else "shortDislikeCount"
@@ -460,7 +475,8 @@ class Community:
         if channel_id.startswith("http"):
             channel_id = regex_search(r"(?:v=|\/)(UC[\w-]{21}[AQgw]).*", channel_id, group=1)
         else:
-            if not (match := re.match(r"(UC[\w-]{21}[AQgw])", channel_id)):
+            match = re.match(r"(UC[\w-]{21}[AQgw])", channel_id)
+            if not match:
                 raise ExtractError("Invalid channel id")
             else:
                 channel_id = match.group(1)
@@ -506,7 +522,8 @@ class Community:
         self.cookie = cookie
 
     def _update_subscriber_count(self, js_data: dict):
-        if (count := dict_search(js_data['header'], "subscriberCountText")) and len(count) > 0:
+        count = dict_search(js_data['header'], "subscriberCountText")
+        if count and len(count) > 0:
             subscribers_human_readable = get_text(count).replace(" subscribers", "")
             subscribers = string_to_int(subscribers_human_readable)
             if subscribers != self.subscribers and subscribers > self.subscribers:
@@ -516,14 +533,21 @@ class Community:
     def _get_image_from_elem(elem: dict) -> str:
         images = elem['thumbnails']
         image_url = images[len(images) - 1]['url']
-        if image_match := image_regex.search(image_url):
+        image_match = image_regex.search(image_url)
+        if image_match:
             image_orig_url = image_match.group(1)
             return "https://" + image_orig_url + "=s0"
         return image_url
 
     def _make_attachment(self, post_id: str, attachment: dict) -> Optional[Post]:
-        if video_attach := attachment.get("videoRenderer"):
-            if not (video_id := video_attach.get("videoId")):
+        video_attach = attachment.get("videoRenderer")
+        image_attach, images_attach, poll_attach = (
+            attachment.get("backstageImageRenderer"), attachment.get("postMultiImageRenderer"),
+            attachment.get("pollRenderer")
+        )
+        if video_attach:
+            video_id = video_attach.get("videoId")
+            if not video_id:
                 return
             thumbnail = self._get_image_from_elem(video_attach['thumbnail'])
             views = get_text(video_attach.get("viewCountText", {"simpleText": "Unknown"}))
@@ -539,16 +563,16 @@ class Community:
                 get_text(video_attach['publishedTimeText'])
             )
             attach = Post.Attachment("video", video)
-        elif image_attach := attachment.get("backstageImageRenderer"):
+        elif image_attach:
             image = Post.Attachment.Image(False, [self._get_image_from_elem(image_attach['image'])])
             attach = Post.Attachment("image", image)
-        elif images_attach := attachment.get("postMultiImageRenderer"):
+        elif images_attach:
             images_url = []
             for image_attach in images_attach['images']:
                 images_url.append(self._get_image_from_elem(image_attach['backstageImageRenderer']['image']))
             image = Post.Attachment.Image(True, images_url)
             attach = Post.Attachment("image", image)
-        elif poll_attach := attachment.get("pollRenderer"):
+        elif poll_attach:
             choices = []
             for raw_poll in poll_attach['choices']:
                 choices.append(get_text(raw_poll['text']))
@@ -572,7 +596,8 @@ class Community:
             "https:" + self._get_image_from_elem(post_data['authorThumbnail']),
             author_channel
         )
-        if attachment := post_data.get('backstageAttachment'):
+        attachment = post_data.get('backstageAttachment')
+        if attachment:
             attach = self._make_attachment(post_id, attachment)
         return Post(
             post_id,
@@ -588,26 +613,31 @@ class Community:
         comm_posts = []
         community_enter_point = "contents/twoColumnBrowseResultsRenderer/tabs/?/tabRenderer/title:Community"
         community_content_path = "content/sectionListRenderer/contents/0/itemSectionRenderer/contents"
-        if community_tab := query_selector(json_data, community_enter_point):
+        community_tab = query_selector(json_data, community_enter_point)
+        if community_tab:
             community_tab = community_tab[0]
             if not community_tab['selected']:
                 self.warn("Expected tab as community.")
                 return comm_posts
-            if contents := query_selector(community_tab, community_content_path):
+            contents = query_selector(community_tab, community_content_path)
+            if contents:
                 if len(contents) == 1 and contents[0].get("messageRenderer"):
                     return comm_posts
             else:
                 self.warn("Failed to query post contents")
                 return comm_posts
             for post_thread in contents:
-                if next_page_thread := post_thread.get('continuationItemRenderer'):
+                next_page_thread = post_thread.get('continuationItemRenderer')
+                if next_page_thread:
                     # TODO Community continue token
                     # next_page_thread['continuationEndpoint']['continuationCommand']['token']
                     continue
                 post_thread = post_thread['backstagePostThreadRenderer']['post']
-                if normal_post := post_thread.get("backstagePostRenderer"):
+                normal_post = post_thread.get("backstagePostRenderer")
+                shared_post = post_thread.get("sharedPostRenderer")
+                if normal_post:
                     comm_posts.append(self._make_normal_post(normal_post))
-                elif shared_post := post_thread.get("sharedPostRenderer"):
+                elif shared_post:
                     post_id = shared_post['postId']
                     author_channel = yt_root_url
                     author_channel += shared_post['endpoint']['commandMetadata']['webCommandMetadata']['url']
@@ -616,7 +646,8 @@ class Community:
                         self._get_image_from_elem(shared_post['thumbnail']),
                         author_channel
                     )
-                    if not (original_post := shared_post['originalPost'].get('backstagePostRenderer')):
+                    original_post = shared_post['originalPost'].get('backstagePostRenderer')
+                    if not original_post:
                         self.warn(f"Unknown post type in post {post_id}")
                         continue
                     comm_posts.append(SharedPost(
@@ -747,7 +778,8 @@ class Membership:
             if response.content_type == "text/html":
                 self.error(f"Failed to fetch membership status")
                 raise NetworkError
-            if member_data := query_selector(await response.json(), content_path):
+            member_data = query_selector(await response.json(), content_path)
+            if member_data:
                 return member_data
             else:
                 self.error("Failed to query membership status path")
@@ -760,12 +792,15 @@ class Membership:
                               "textCollectionRenderer/?/cardItemTextCollectionRenderer/textRenderers/?/"
                               "cardItemTextRenderer/style:")
         for membership_data in membership_list:  # type: dict
-            if index_data := membership_data.get("cardItemRenderer"):
+            index_data, member_data = (
+                membership_data.get("cardItemRenderer"), membership_data.get('cardItemContainerRenderer')
+            )
+            if index_data:
                 item_index = get_text(
                     index_data['headingRenderer']['cardItemTextCollectionRenderer']['textRenderers'][0]
                     ['cardItemTextRenderer']['text']
                 )
-            elif member_data := membership_data.get('cardItemContainerRenderer'):
+            elif member_data:
                 if not item_index:
                     self.error("Unknown member type")
                     raise ExtractError
@@ -773,7 +808,8 @@ class Membership:
                 entry = (ContinuationCommandEntry.FromString(b64decode(token)))
                 details = ContinuationCommand.FromString(b64decode(unquote(entry.entry.details)))
                 channel_id = details.entry.details.channelDetails.channelId
-                if name := query_selector(member_data, member_status_path + "CARD_ITEM_TEXT_STYLE_TITLE_2"):
+                name = query_selector(member_data, member_status_path + "CARD_ITEM_TEXT_STYLE_TITLE_2")
+                if name:
                     name = get_text(name[0]['text'])
                 elif details.entry.details.channelDetails.channelId == "unlimited-B-music":
                     name = "Youtube Music"
@@ -788,7 +824,8 @@ class Membership:
                 }
                 if item_index != "Memberships":
                     # Expire time
-                    if expired_time := query_selector(member_data, member_status_path + "CARD_ITEM_TEXT_STYLE_BODY_2A"):
+                    expired_time = query_selector(member_data, member_status_path + "CARD_ITEM_TEXT_STYLE_BODY_2A")
+                    if expired_time:
                         expired_time = expired_time[0]['text']['runs'][1]['text']
                         data['expire_time'] = expired_time
                 memberships.append(Member(**data))
@@ -805,12 +842,14 @@ class Membership:
         items_path = "content/sectionListRenderer/contents/?/itemSectionRenderer"
         item_name_path = "0/cardItemRenderer/headingRenderer/cardItemTextCollectionRenderer/textRenderers/0/" \
                          "cardItemTextRenderer/text"
-        if item_selection := query_selector(json_data, items_enter_point):
+        item_selection = query_selector(json_data, items_enter_point)
+        if item_selection:
             item_selection = item_selection[0]
             if not item_selection['selected']:
                 self.error("Expected page is memberships and purchases")
                 raise ExtractError
-            if items := query_selector(item_selection, items_path):
+            items = query_selector(item_selection, items_path)
+            if items:
                 has_inactive = False
                 for root_item in items:
                     root_item = root_item['contents']
@@ -841,7 +880,8 @@ class Membership:
                 raise NetworkError
             scripts = await response.json()
             for script in scripts:
-                if resp_json := script.get("response"):
+                resp_json = script.get("response")
+                if resp_json:
                     return resp_json
 
     async def _html_fetch(self):
@@ -865,7 +905,8 @@ class Membership:
         """
         self.info("Downloading webpage")
         resp_json = await (self._json_fetch() if yt_internal_api.key else self._html_fetch())
-        if membership_data := await self._parse_item_path(resp_json):
+        membership_data = await self._parse_item_path(resp_json)
+        if membership_data:
             memberships = await self._parse_membership_list(membership_data)
             return memberships
         return []

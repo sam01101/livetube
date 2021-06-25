@@ -37,8 +37,10 @@ def get_text(item: dict) -> str:
         return item['simpleText']
     ret = ""
     for cmd in item['runs']:  # type: dict
-        if url_ep := cmd.get("navigationEndpoint", {}).get("urlEndpoint"):
-            if url := redirect_regex.match(url_ep['url']):
+        url_ep = cmd.get("navigationEndpoint", {}).get("urlEndpoint")
+        if url_ep:
+            url = redirect_regex.match(url_ep['url'])
+            if url:
                 ret += unquote(url.group(1))
             else:
                 ret += url_ep['url']
@@ -120,7 +122,8 @@ class http_request:
                         try:
                             r: dict = await response.json()
                             response.close()
-                            if error := r.get("error"):
+                            error = r.get("error")
+                            if error:
                                 status, msg = error['status'], error['message']
                                 if status == "PERMISSION_DENIED" and msg == "The request is missing a valid API key.":
                                     # Update API key

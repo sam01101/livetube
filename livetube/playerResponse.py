@@ -74,15 +74,18 @@ class playabilityStatus:
         self.status = data.get("status", "UNPLAYABLE")
         self.reason = data.get("reason", "")
         self.playableInEmbed = data.get('playableInEmbed', False)
-        if sub_reason := query_selector(data, "errorScreen/playerErrorMessageRenderer/subreason"):
+        sub_reason = query_selector(data, "errorScreen/playerErrorMessageRenderer/subreason")
+        if sub_reason:
             self.subreason = get_text(sub_reason)
-        if poll_ms := query_selector(data, "liveStreamability/liveStreamabilityRenderer/pollDelayMs"):
+        poll_ms = query_selector(data, "liveStreamability/liveStreamabilityRenderer/pollDelayMs")
+        if poll_ms:
             self.pollDelayMs = int(poll_ms)
-        if livestream_offline := query_selector(data,
-                                                "liveStreamability/liveStreamabilityRenderer/"
-                                                "offlineSlate/liveStreamOfflineSlateRenderer"):
+        livestream_offline = query_selector(data, "liveStreamability/liveStreamabilityRenderer/offlineSlate"
+                                                  "/liveStreamOfflineSlateRenderer")
+        if livestream_offline:
             self.isCountDown = livestream_offline.get("canShowCountdown", False)
-            if scheduled_start_time := livestream_offline.get("scheduledStartTime"):
+            scheduled_start_time = livestream_offline.get("scheduledStartTime")
+            if scheduled_start_time:
                 self.scheduled_start_time = int(scheduled_start_time)
 
     def update(self, data: dict):
@@ -93,19 +96,26 @@ class playabilityStatus:
                 "errorScreen",
                 "liveStreamability"
         ):
-            if value := data.get(key):
+            value = data.get(key)
+            if value:
                 if key == "errorScreen":
-                    if sub_reason := query_selector(value, "playerErrorMessageRenderer/subreason"):
+                    sub_reason = query_selector(value, "playerErrorMessageRenderer/subreason")
+                    if sub_reason:
                         self.subreason = get_text(sub_reason)
                 elif key == "liveStreamability":
-                    if not (value := value.get("liveStreamabilityRenderer")):
+                    value = value.get("liveStreamabilityRenderer")
+                    if not value:
                         return
-                    if poll_ms := query_selector(value, "pollDelayMs"):
+                    poll_ms = query_selector(value, "pollDelayMs")
+                    if poll_ms:
                         self.pollDelayMs = int(poll_ms)
-                    if livestream_offline := query_selector(value, "offlineSlate/liveStreamOfflineSlateRenderer"):
-                        if update := livestream_offline.get("canShowCountdown") is not None:
+                    livestream_offline = query_selector(value, "offlineSlate/liveStreamOfflineSlateRenderer")
+                    if livestream_offline:
+                        update = livestream_offline.get("canShowCountdown") is not None
+                        if update:
                             self.isCountDown = update
-                        if scheduled_start_time := livestream_offline.get("scheduledStartTime"):
+                        scheduled_start_time = livestream_offline.get("scheduledStartTime")
+                        if scheduled_start_time:
                             self.scheduled_start_time = int(scheduled_start_time)
                 else:
                     setattr(self, key, value)
@@ -128,7 +138,8 @@ class streamingData:
             self.audios = {}
             self.videos = {}
             for formats in adaptiveFormats:
-                if sig_raw := formats.get('signatureCipher'):
+                sig_raw = formats.get('signatureCipher')
+                if sig_raw:
                     cipher = js_cache_v2[js_url]
                     if not cipher:
                         raise HTMLParseError("Cipher not found.")
@@ -167,20 +178,28 @@ class streamingData:
                 self.expireTimestamp = int(time.time()) + self.expiresInSeconds + 120
 
     def update(self, data: dict, js_url: str):
-        if update := data.get("expiresInSeconds"):
+        update = data.get("expiresInSeconds")
+        if update:
             self.expiresInSeconds = update
 
-        if update := data.get("hlsManifestUrl"):
+        update = data.get("hlsManifestUrl")
+
+        if update:
             self.hlsManifestUrl = update
 
-        if update := data.get("dashManifestUrl"):
+        update = data.get("dashManifestUrl")
+
+        if update:
             self.dashManifestUrl = update
 
-        if update := data.get("adaptiveFormats"):
+        update = data.get("adaptiveFormats")
+
+        if update:
             self.audios = {}
             self.videos = {}
             for formats in update:
-                if sig_raw := formats.get('signatureCipher'):
+                sig_raw = formats.get('signatureCipher')
+                if sig_raw:
                     cipher = js_cache_v2[js_url]
                     if not cipher:
                         raise HTMLParseError("Cipher not found.")
@@ -271,19 +290,25 @@ class videoDetails:
 
     def update(self, extra_data: dict):
         extra_data = extra_data.get("playerMicroformatRenderer", extra_data)
-        if update := extra_data.get("title"):
+        update = extra_data.get("title")
+        if update:
             self.title = get_text(update)
-        if update := extra_data.get("lengthSeconds"):
+        update = extra_data.get("lengthSeconds")
+        if update:
             self.lengthSeconds = int(update)
-        if update := extra_data.get("thumbnail", {}).get("thumbnails"):
+        update = extra_data.get("thumbnail", {}).get("thumbnails")
+        if update:
             self.thumbnail = update[len(update) - 1]['url']
         # Extra basic info
-        if update := extra_data.get("isUnlisted") is not None:
+        update = extra_data.get("isUnlisted") is not None
+        if update:
             self.isUnlisted = update
         # View count info
-        if update := extra_data.get("viewCount"):
+        update = extra_data.get("viewCount")
+        if update:
             self.viewCount = update
-        if update := extra_data.get("liveBroadcastDetails"):
+        update = extra_data.get("liveBroadcastDetails")
+        if update:
             self.broadcastDetails = update
             self.isLive = self.broadcastDetails['isLiveNow']
             # Format of startTimestamp / endTimestamp : "%Y-%m-%dT%H:%M:%S%z"
@@ -300,9 +325,11 @@ class playerResponse:
         self.js_url = js_url
         self.responseContext = responseContext(player_response.get('responseContext'))
         self.playabilityStatus = playabilityStatus(player_response.get('playabilityStatus'))
-        if update := player_response.get('videoDetails'):
+        update = player_response.get('videoDetails')
+        if update:
             self.videoDetails = videoDetails(update, player_response['microformat'])
-        if update := player_response.get('streamingData'):
+        update = player_response.get('streamingData')
+        if update:
             self.streamData = streamingData(update, js_url)
 
     def raise_for_status(self):
@@ -331,16 +358,19 @@ class playerResponse:
             raise VideoUnavailable
 
     def update(self, update_items: dict):
-        if update := update_items.get('playabilityStatus'):
+        update = update_items.get('playabilityStatus')
+        if update:
             self.playabilityStatus.update(update)
-        if update := update_items.get('responseContext'):
+        update = update_items.get('responseContext')
+        if update:
             self.responseContext.update(update)
         if update_items.get('streamingData'):
             if self.streamData:
                 self.streamData.update(update, self.js_url)
             else:
                 self.streamData = streamingData(update_items['streamingData'], self.js_url)
-        if update := update_items.get("microformat"):
+            update = update_items.get("microformat")
+        if update:
             if self.videoDetails:
                 self.videoDetails.update(update)
             else:
