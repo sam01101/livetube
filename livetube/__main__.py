@@ -5,37 +5,40 @@
     文件:    __main__.py
     文件描述: 
 """
+# DO NOT USE FORMAT IMPORT PACKAGE
 
 # General
 import asyncio
+import warnings
 import json
+from asyncio import AbstractEventLoop
 # Parsing
 import re
-import warnings
-from asyncio import AbstractEventLoop
 from base64 import b64encode, b64decode
 from typing import Optional, Dict, Union, List
 from urllib.parse import parse_qsl, quote, unquote, quote_plus
+from livetube.util.player import get_ytplayer_resp
+from livetube.membership_pb3 import ContinuationCommand, ContinuationCommandEntry
+from livetube.util.parser import ScriptTaker
 
 # Networking
 import aiohttp
 import yarl
 
-from livetube.communityPosts import Post, SharedPost
-# Models
-from livetube.memberShips import Member
-from livetube.membership_pb3 import ContinuationCommand, ContinuationCommandEntry
-from livetube.playerResponse import playerResponse
-# Utils
-from livetube.util import player
-from livetube.util.cache import (shared_tcp_pool, js_cache_v2, yt_internal_api,
-                                 get_yt_client_info, default_header, yt_root_url)
 # Cache for YouTube
 from livetube.util.cipher import Cipher
+from livetube.util.cache import (shared_tcp_pool, js_cache_v2, yt_internal_api,
+                                 get_yt_client_info, default_header, yt_root_url)
+
+# Models
+from livetube.memberShips import Member
+from livetube.communityPosts import Post, SharedPost
+from livetube.playerResponse import playerResponse
+
+# Utils
+from livetube.util import player
 from livetube.util.exceptions import RegexMatchError, NetworkError, HTMLParseError, ExtractError
 from livetube.util.js import initial_data, video_info_url, query_selector, dict_search
-from livetube.util.parser import ScriptTaker
-from livetube.util.player import get_ytplayer_resp
 from livetube.util.regex import regex_search
 from livetube.utils import time_map, get_text, string_to_int, http_request, logger, calculate_SNAPPISH
 
