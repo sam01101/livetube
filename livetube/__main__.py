@@ -3,44 +3,48 @@
     作者: Sam
     创建日期: 2020/12/18 10:18
     文件:    __main__.py
-    文件描述: 
+    文件描述:
 """
-# DO NOT USE FORMAT IMPORT PACKAGE
 
 # General
 import asyncio
-import warnings
 import json
-from asyncio import AbstractEventLoop
+import time
+
 # Parsing
 import re
+import warnings
+from asyncio import AbstractEventLoop
 from base64 import b64encode, b64decode
-from typing import Optional, Dict, Union, List
+from io import BytesIO
+from typing import Optional, Dict, Union, List, BinaryIO
 from urllib.parse import parse_qsl, quote, unquote, quote_plus
-from livetube.util.player import get_ytplayer_resp
-from livetube.membership_pb3 import ContinuationCommand, ContinuationCommandEntry
-from livetube.util.parser import ScriptTaker
 
 # Networking
 import aiohttp
 import yarl
 
-# Cache for YouTube
-from livetube.util.cipher import Cipher
-from livetube.util.cache import (shared_tcp_pool, js_cache_v2, yt_internal_api,
-                                 get_yt_client_info, default_header, yt_root_url)
-
 # Models
 from livetube.memberShips import Member
+from livetube.membership_pb3 import ContinuationCommand, ContinuationCommandEntry
+from livetube.studio_pb3 import GoogleVisitorId
 from livetube.communityPosts import Post, SharedPost
 from livetube.playerResponse import playerResponse
-
 # Utils
 from livetube.util import player
+from livetube.util.cache import (shared_tcp_pool, js_cache_v2, yt_internal_api, user_agent,
+                                 get_yt_client_info, default_header, yt_root_url, studio_root_url)
+# Cache for YouTube
+from livetube.util.cipher import Cipher
 from livetube.util.exceptions import RegexMatchError, NetworkError, HTMLParseError, ExtractError
 from livetube.util.js import initial_data, video_info_url, query_selector, dict_search
+from livetube.util.parser import ScriptTaker
+from livetube.util.player import get_ytplayer_resp
 from livetube.util.regex import regex_search
-from livetube.utils import time_map, get_text, string_to_int, http_request, logger, calculate_SNAPPISH
+from livetube.utils import (time_map, get_text, string_to_int, http_request, logger,
+                            calculate_SNAPPISH, gen_yt_upload_session_id)
+
+"""DO NOT USE "FORMAT IMPORT PACKAGE"""
 
 image_regex = re.compile(r"(yt3\.ggpht\.com/.+?)=.+")
 
@@ -52,7 +56,7 @@ class Video:
                  header: Optional[Dict[str, Union[str, bool, int]]] = None,
                  loop: Optional[AbstractEventLoop] = None):
         """
-        Create a video object
+        Video object
 
         :param video_id: Video ID, can be url
         :param cookie:   Cookie
@@ -785,7 +789,7 @@ class Membership:
                 self.error("Failed to query membership status path")
                 raise NetworkError
 
-    async def _parse_membership_list(self, membership_list: list):
+    async def _parse_membership_list(self, membership_list: Union[list, tuple]):
         memberships = []
         item_index = ""  # Memberships | Inactive Memberships
         member_status_path = ("baseRenderer/cardItemRenderer/headingRenderer/cardItemTextWithImageRenderer/"
@@ -850,7 +854,7 @@ class Membership:
                 raise ExtractError
             items = query_selector(item_selection, items_path)
             if items:
-                has_inactive = False
+                has_inactive, root_item = False, None
                 for root_item in items:
                     root_item = root_item['contents']
                     item_name = get_text(query_selector(root_item, item_name_path))
@@ -858,11 +862,11 @@ class Membership:
                         return root_item
                     elif item_name == "Inactive Memberships":
                         has_inactive = True
-                if has_inactive:
+                if has_inactive and root_item:
                     return root_item
                 # There's no membership available (Both type)
                 self.info("There's no membership available")
-                return {}
+                return ()
             else:
                 self.error("Failed to query items path")
         else:
@@ -910,3 +914,413 @@ class Membership:
             memberships = await self._parse_membership_list(membership_data)
             return memberships
         return []
+
+
+class Studio:
+    def __init__(self, cookie: dict,
+                 header: Optional[Dict[str, Union[str, bool, int]]] = None,
+                 loop: Optional[AbstractEventLoop] = None):
+        """
+        Youtube studio object
+
+        :param cookie: Cookie
+        :param header: Additional header
+        :param loop: Event loop
+        :raise ValueError: Cookie doesn't contain SAPISID
+        """
+
+        # Header
+        self.header = {
+            "User-Agent": user_agent,
+            "X-Origin": "https://studio.youtube.com",
+            "Origin": "https://studio.youtube.com",
+            "Referer": "https://studio.youtube.com",
+        }
+        if header:
+            self.header.update(header)
+
+        # Client setup
+        self.loop = loop or asyncio.get_event_loop()
+        if cookie is None:
+            cookie = dict()
+        cookie.update({"PREF": "hl=en"})
+        if not cookie.get("SAPISID"):
+            raise ValueError("SAPISID not found in cookie")
+        self.cookie = cookie
+        self.upload_cache = {}
+        self.session_cache = {}
+
+        # http
+        client_id = hash(self.loop)
+        if not shared_tcp_pool.get(client_id):
+            shared_tcp_pool[client_id] = aiohttp.TCPConnector(loop=self.loop, ttl_dns_cache=60,
+                                                              force_close=True, enable_cleanup_closed=True, limit=0)
+        self.http = shared_tcp_pool[client_id]
+
+        # endpoint
+        self.upload_ep = "https://upload.youtube.com"
+
+    # Logger
+
+    def debug(self, message: str):
+        logger.debug(f"[Studio {self.cookie.get('SSID')}] {message}")
+
+    def info(self, message: str):
+        logger.info(f"[Studio {self.cookie.get('SSID')}] {message}")
+
+    def warn(self, message: str):
+        logger.warning(f"[Studio {self.cookie.get('SSID')}] {message}")
+
+    def error(self, message: str):
+        logger.error(f"[Studio {self.cookie.get('SSID')}] {message}")
+
+    # ======
+
+    def update_cookie(self, cookie: dict):
+        """
+        Update cookie
+
+        :param cookie: Cookie
+        :raise ValueError: Cookie doesn't contain SAPISID
+        """
+        if not cookie.get("SAPISID"):
+            raise ValueError("SAPISID not found, please check your cookie.")
+        self.cookie = cookie
+
+    async def _upload_video(self, file: BytesIO, session_id: str):
+        """
+        Actual upload function, uploads video chunk to UploadServer
+
+        :param session_id: Upload session id
+        """
+
+        last_end_offset = 0
+        data = self.upload_cache[session_id]
+        header = self.header.copy()
+        while True:
+            # noinspection PyBroadException
+            try:
+                chunk = file.read(104857600)
+                upload_cmd = []
+                if len(chunk) > 0:
+                    upload_cmd.append("upload")
+                if len(chunk) != 104857600 or not chunk:
+                    upload_cmd.append("finalize")
+                if not upload_cmd:
+                    return True
+                header.update({
+                    "X-Goog-Upload-File-Name": data['file-name'],
+                    "X-Goog-Upload-Offset": str(last_end_offset),
+                    "X-Goog-Upload-Command": ", ".join(upload_cmd),
+                })
+                async with http_request(self.http, "POST", url=data['upload-url'],
+                                        header=header, cookie=self.cookie, data=chunk) as response:
+                    if response.status == 200:
+                        last_end_offset += len(chunk)
+                        if response.headers.get("X-Goog-Upload-Status") == "final":
+                            # Upload completed
+                            return True
+            except Exception:
+                pass
+
+    async def upload_video(self, file: Union[BytesIO, BinaryIO], file_name: str = ""):
+        """
+        Uploads video to youtube
+
+        :param file: file stream
+        :param file_name: file name
+        :param async_upload: Upload all chunk at one time
+        :raise RuntimeError: Failed to start upload session
+        :return: upload session id, a task that uploading the video
+        """
+
+        def get_file_size() -> int:
+            file.seek(0, 2)
+            size = file.tell()
+            file.seek(0, 0)
+            return size
+
+        header = self.header.copy()
+        header.update({
+            "X-Goog-Upload-Command": "start",
+            "X-Goog-Upload-File-Name": file_name,
+            "X-Goog-Upload-Header-Content-Length": str(get_file_size()),
+            "X-Goog-Upload-Protocol": "resumable"
+        })
+        upload_session_id = gen_yt_upload_session_id()
+        async with http_request(self.http, "POST", url=self.upload_ep + "/upload/studio",
+                                header=header, cookie=self.cookie,
+                                json_data={"frontendUploadId": upload_session_id}) as response:
+            if response.status == 200:
+                self.upload_cache[upload_session_id] = {
+                    "file-name": file_name,
+                    "upload-url": response.headers.get("x-goog-upload-url"),
+                    "scotty-resource-id": response.headers.get("x-goog-upload-header-scotty-resource-id")
+                }
+                task = asyncio.create_task(self._upload_video(file, upload_session_id))
+                self.upload_cache[upload_session_id]['task'] = task
+                return upload_session_id, task
+            else:
+                raise RuntimeError("Failed to start upload session")
+
+    async def _get_challenge(self):
+        await yt_internal_api.fetch()
+        endpoint = studio_root_url + f"/youtubei/{yt_internal_api.version}/att/get"
+        endpoint += "?alt=json&key=" + yt_internal_api.key
+        header = self.header.copy()
+        visitor_id = self.cookie.get("VISITOR_INFO1_LIVE")
+        if not visitor_id:
+            raise ValueError("VISITOR_INFO1_LIVE is required to get session challenge")
+        visitor_proto = GoogleVisitorId(
+            visitor_info_live=visitor_id,
+            timestamp=int(time.time())
+        )
+        header['X-Goog-Visitor-Id'] = quote(b64encode(visitor_proto.SerializeToString()))
+        async with http_request(self.http, "POST", url=endpoint, header=calculate_SNAPPISH(self.cookie, header),
+                                cookie=self.cookie, json_data={
+                    "context": {
+                        "client": get_yt_client_info()
+                    }
+                }) as response:
+            if response.status == 200:
+                js_resp = await response.json()
+                return js_resp.get("challenge")
+
+    async def _get_session_token(self, bg_token=""):
+        if self.session_cache.get("ts") and time.time() - self.session_cache['ts'] <= 8 * 60 * 60:
+            return self.session_cache['token']
+        elif not bg_token:
+            raise ValueError("botGuard token is required to get session token")
+        challenge_data = await self._get_challenge()
+        endpoint = studio_root_url + f"/youtubei/{yt_internal_api.version}/att/esr"
+        endpoint += "?alt=json&key=" + yt_internal_api.key
+        header = self.header.copy()
+        visitor_id = self.cookie.get("VISITOR_INFO1_LIVE")
+        if not visitor_id:
+            raise ValueError("VISITOR_INFO1_LIVE is required to get session id")
+        visitor_proto = GoogleVisitorId(
+            visitor_info_live=visitor_id,
+            timestamp=int(time.time())
+        )
+        header['X-Goog-Visitor-Id'] = quote(b64encode(visitor_proto.SerializeToString()))
+        async with http_request(self.http, "POST", url=endpoint, header=calculate_SNAPPISH(self.cookie, header),
+                                cookie=self.cookie, json_data={
+                    "context": {
+                        "client": get_yt_client_info()
+                    },
+                    "challenge": challenge_data,
+                    "botguardResponse": bg_token
+                }) as response:
+            if response.status == 200:
+                js_resp = await response.json()
+                if js_resp.get("vint", 1) != 0:
+                    self.warn("botGuard token check failed!")
+                    return ""
+                else:
+                    token = js_resp['sessionToken']
+                    self.session_cache = {
+                        "ts": time.time(),
+                        "token": token
+                    }
+                    return token
+
+    @staticmethod
+    def _handle_feedback(data: dict):
+        response = {}
+        video_id = data.get("videoId")
+        if video_id:
+            response['video_id'] = video_id
+        contents = data.get("contents")
+        if contents:
+            contents = contents.get("uploadFeedbackItemRenderer") or contents.get("uploadFeedbackItemContinuation")
+            response['continue_token'] = contents['continuations'][1]['uploadFeedbackRefreshContinuation']['continuation']
+            if contents.get("uploadStatus"):
+                response['status'] = contents['uploadStatus']['uploadStatus']
+            process_progress = contents.get("processingProgressBar")
+            if process_progress:
+                process = {'progress': process_progress['fractionCompleted']}
+                if process_progress.get("remainingTimeSeconds"):
+                    process['remain'] = process_progress['remainingTimeSeconds']
+                response['process'] = process
+            upload_progress = contents.get("transferProgressBar")
+            if upload_progress:
+                upload = {'progress': upload_progress['fractionCompleted']}
+                if upload_progress.get("remainingTimeSeconds"):
+                    upload['remain'] = upload_progress['remainingTimeSeconds']
+                response['upload'] = upload
+        return response
+
+    async def create_video(self, upload_session: str, bg_token: str,
+                           title="", description="", is_draft: bool = None,
+                           privacy="UNLISTED", sponsors_only: bool = None,
+                           audio_language="zxx", category=0, allow_comment: bool = None,
+                           add_to_playlist_ids: Union[list, tuple] = None,
+                           del_from_playlist_ids: Union[list, tuple] = None):
+        """
+        Create video metadata
+
+        Params:
+            - title
+            - description
+            - privacy (PUBLIC / UNLISTED / PRIVATE)
+            - sponsorsOnly (when: privacy = UNLISTED)
+            - audioLanguage (zxx = UNAVAILABLE)
+            - category (0)
+            - addToPlaylist
+            - draftState (When true, ignore privacy)
+            - allow_comment
+
+        :raise NetworkError: Network error
+        :raise ValueError: Failed to get session token
+        """
+        session_token = await self._get_session_token(bg_token)
+        if not session_token:
+            raise ValueError("Failed to get session token")
+        context = {
+            "client": get_yt_client_info(studio=True),
+            "request": {
+                "sessionInfo": {
+                    "token": session_token
+                }
+            }
+        }
+        metadata = {
+            "context": context,
+            "videoReadMask": {},
+        }
+        if title:
+            metadata['title'] = {
+                "newTitle": title
+            }
+        if description:
+            metadata['description'] = {
+                "newDescription": description
+            }
+        if privacy:
+            if privacy not in ("PUBLIC", "UNLISTED", "PRIVATE"):
+                privacy = "UNLISTED"
+            metadata['privacy'] = {
+                "newPrivacy": privacy
+            }
+        if privacy == "UNLISTED" and type(sponsors_only) is bool:
+            metadata['sponsorsOnly'] = {
+                "isSponsorsOnly": sponsors_only
+            }
+        if audio_language:
+            metadata['audioLanguage'] = {
+                "newAudioLanguage": audio_language
+            }
+        if type(category) is int:
+            metadata['category'] = {
+                "newCategoryId": category
+            }
+        if type(is_draft) is bool:
+            if is_draft:
+                if metadata.get("privacy"):
+                    metadata['privacy'] = "PRIVATE"
+                if metadata.get("sponsorsOnly"):
+                    del metadata['sponsorsOnly']
+            metadata['draftState'] = {
+                "isDraft": is_draft
+            }
+        if type(allow_comment) is bool:
+            metadata['commentOptions'] = {
+                "newAllowComments": allow_comment,
+                "newCanViewRatings": allow_comment
+            }
+        if add_to_playlist_ids or del_from_playlist_ids:
+            playlist = {}
+            if add_to_playlist_ids:
+                playlist['addToPlaylistIds'] = add_to_playlist_ids
+            if del_from_playlist_ids:
+                playlist['deleteFromPlaylistIds'] = del_from_playlist_ids
+            if len(playlist):
+                metadata['addToPlaylist'] = playlist
+        await yt_internal_api.fetch(studio=True, cookie=self.cookie)
+        endpoint = studio_root_url + f"/youtubei/{yt_internal_api.version}/upload/createvideo"
+        endpoint += "?alt=json&key=" + yt_internal_api.key
+        video_id = None
+        async with http_request(self.http, "POST", url=endpoint, header=calculate_SNAPPISH(self.cookie, self.header),
+                                cookie=self.cookie, json_data={
+            "context": context,
+            "botguardClientResponse": bg_token,
+            "frontendUploadId": upload_session,
+            "resourceId": {
+                "scottyResourceId": {
+                    "id": self.upload_cache[upload_session]['scotty-resource-id']
+                }
+            },
+            "initialMetadata": {}
+        }) as response:
+            if response.status == 200:
+                js_resp = await response.json()
+                feedback = self._handle_feedback(js_resp)
+                video_id = feedback.get("video_id")
+                if not video_id:
+                    return feedback
+        metadata['encryptedVideoId'] = video_id
+        endpoint = studio_root_url + f"/youtubei/{yt_internal_api.version}/video_manager/metadata_update"
+        endpoint += "?alt=json&key=" + yt_internal_api.key
+        async with http_request(self.http, "POST", url=endpoint, header=calculate_SNAPPISH(self.cookie, self.header),
+                                cookie=self.cookie, json_data=metadata) as _:
+            pass
+        return feedback
+
+    async def create_playlist(self, title: str, description="",
+                              privacy="UNLSITED", source_playlist_id: str = None,
+                              add_to_top: bool = None) -> str:
+        """
+        Create playlist
+
+        Params:
+            - title
+            - description
+            - privacy (PUBLIC / UNLISTED / PRIVATE)
+            - source_playlist_id (Copy playlist)
+            - add_to_top
+        :return: Created playlist id
+        """
+        playlist_id = ""
+        payload = {
+            "context": {
+                "client": get_yt_client_info(studio=True)
+            },
+            "title": title,
+        }
+        if privacy not in ("PUBLIC", "UNLISTED", "PRIVATE"):
+            privacy = "UNLISTED"
+        payload['privacyStatus'] = privacy
+        if description:
+            payload['description'] = description
+        if source_playlist_id:
+            payload['sourcePlaylistId'] = source_playlist_id
+        await yt_internal_api.fetch(studio=True, cookie=self.cookie)
+        endpoint = studio_root_url + f"/youtubei/{yt_internal_api.version}/playlist/create"
+        endpoint += "?alt=json&key=" + yt_internal_api.key
+        async with http_request(self.http, "POST", url=endpoint, header=calculate_SNAPPISH(self.cookie, self.header),
+                                cookie=self.cookie, json_data=payload) as response:
+            if response.status == 200:
+                js_resp = await response.json()
+                playlist_id = js_resp['playlistId']
+        if playlist_id and type(add_to_top) is bool:
+            endpoint = (f"{yt_internal_api.endpoint}/{yt_internal_api.version}/browse/edit_playlist"
+                        f"?key={yt_internal_api.key}")
+            async with http_request(self.http, "POST", url=endpoint,
+                                    header=calculate_SNAPPISH(self.cookie, default_header),
+                                    cookie=self.cookie,
+                                    json_data={"context": {
+                                        "client": get_yt_client_info(studio=True)
+                                    },
+                                        "actions": [
+                                            {
+                                                "action": "ACTION_SET_ADD_TO_TOP",
+                                                "addToTop": add_to_top
+                                            }
+                                        ],
+                                        "playlistId": playlist_id
+                                    }) as response:
+                if response.status == 200:
+                    js_resp = await response.json()
+                    if js_resp['status'] != "STATUS_SUCCEEDED":
+                        self.warn("Faield to edit playlist")
+        return playlist_id

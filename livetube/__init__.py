@@ -19,5 +19,5 @@ try:
 except ModuleNotFoundError:
     pass
 
-from livetube.__main__ import Video, Membership, Community
+from livetube.__main__ import Video, Membership, Community, Studio
 from livetube.util.exceptions import *

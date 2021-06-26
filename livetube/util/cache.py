@@ -5,13 +5,19 @@
     文件:    cache.py
     文件描述: Cached data for reuse
 """
+import asyncio
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Union, Any, Optional, Dict
 
 import aiohttp
 
+from livetube.util import player
+from livetube.util.parser import ScriptTaker
+from livetube.utils import http_request
+
 yt_root_url = "https://www.youtube.com"
+studio_root_url = "https://studio.youtube.com"
 user_agent = " ".join([
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
     "AppleWebKit/537.36 (KHTML, like Gecko)",
@@ -27,14 +33,20 @@ default_header = {
 shared_tcp_pool: Dict[int, "aiohttp.TCPConnector"] = {}
 
 
-def get_yt_client_info():
-    return {
+def get_yt_client_info(studio=False):
+    data = {
         "hl": "en_US",
-        "clientName": yt_internal_api.client_name,
-        "clientVersion": yt_internal_api.client_version,
         "browserName": yt_internal_api.client_browser_name,
-        "browserVersion": yt_internal_api.client_browser_version
+        "browserVersion": yt_internal_api.client_browser_version,
+        "clientName": yt_internal_api.yt_client_name,
+        "clientVersion": yt_internal_api.yt_client_version,
     }
+    if studio:
+        data.update({
+            "clientName": yt_internal_api.studio_client_name,
+            "clientVersion": yt_internal_api.studio_client_version,
+        })
+    return data
 
 
 @dataclass
@@ -47,6 +59,8 @@ class InternalAPI:
     client_browser_version = "90.0.4430.72"
     yt_client_name = "1"
     yt_client_version = "2.20770101.00.00"
+    studio_client_name = "62"
+    studio_client_version = "1.20770101.00.00"
     endpoint = "%s/youtubei" % yt_root_url
 
     def __getitem__(self, item):
@@ -70,13 +84,38 @@ class InternalAPI:
         self.update({
             "key": script['INNERTUBE_API_KEY'],
             "version": script['INNERTUBE_API_VERSION'],
-            "client_name": script['INNERTUBE_CLIENT_NAME'],
+            # "client_name": script['INNERTUBE_CLIENT_NAME'],
             "client_version": script['INNERTUBE_CLIENT_VERSION'],
-            "client_browser_name": client['browserName'],
-            "client_browser_version": client['browserVersion'],
+            "client_browser_name": client.get("browserName", self.client_browser_name),
+            "client_browser_version": client.get("browserVersion", self.client_browser_name),
             "yt_client_name": script['INNERTUBE_CONTEXT_CLIENT_NAME'],
-            "yt_client_version": script['INNERTUBE_CONTEXT_CLIENT_VERSION']
+            "yt_client_version": script['INNERTUBE_CONTEXT_CLIENT_VERSION'],
         })
+
+    async def fetch(self, force=False, studio=False, cookie: dict = None):
+        """
+        Manually fetch all data, when not exist
+
+        :param force: Don't check for data exist
+        :param studio: Is fetching in studio dashboard
+        :param cookie: Cookie for fetching studio
+        :raise NetworkError: Network error
+        :raise ValueError: Studio mode but no cookie
+        """
+        loop = asyncio.get_event_loop()
+        client_id = hash(loop)
+        pool = shared_tcp_pool.get(client_id)
+        if not pool:
+            shared_tcp_pool[client_id] = aiohttp.TCPConnector(loop=loop, ttl_dns_cache=60,
+                                                              force_close=True, enable_cleanup_closed=True, limit=0)
+        if self.key and not studio and not force:
+            return
+        if studio and not cookie:
+            raise ValueError("Cookie required to fetch studio client")
+        async with http_request(shared_tcp_pool[client_id],
+                                url=studio_root_url if studio else yt_root_url,
+                                header=default_header, cookie=cookie if studio else {}) as response:
+            self.update_html(player.get_ytplayer_setconfig(ScriptTaker(await response.text()).scripts))
 
 
 class JSCache:

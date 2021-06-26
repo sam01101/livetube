@@ -57,6 +57,8 @@ def get_ytplayer_setconfig(scripts: list) -> dict:
     """
     setconfig_patterns = [
         r'ytcfg\.set\(({.+?})\);.+setMessage',
+        r'ytcfg\.set\(({.+?})\);importScripts',
+        r'var ytcfg=\{.+?\};\nytcfg\.set\(({.+?})\);',
         r"yt\.setConfig\(.*['\"]PLAYER_CONFIG['\"]:\s*"
     ]
     for script in scripts:

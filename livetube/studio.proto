@@ -1,0 +1,6 @@
+syntax = "proto3";
+
+message GoogleVisitorId {
+  string visitor_info_live = 1;
+  uint64 timestamp = 5;
+}

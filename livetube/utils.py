@@ -10,6 +10,7 @@ import json
 import logging
 import re
 from hashlib import sha1
+from random import random
 from time import time
 from typing import Union
 from urllib.parse import unquote
@@ -21,6 +22,7 @@ from livetube.util.exceptions import NetworkError
 logger = logging.getLogger("livetube")
 
 redirect_regex = re.compile(r"https://www\.youtube\.com/redirect\?[\w+_&=]+&q=(.+)")
+sid_char = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 number_table = {"K": 1000, "M": 1000000, "B": 1000000000}
 time_map = {
     "seconds": "秒",
@@ -120,23 +122,19 @@ class http_request:
                                                     **self.extra)
                     if response.status > 399 and self.raise_error:
                         try:
-                            r: dict = await response.json()
+                            r: dict = await response.json(content_type=None)
                             response.close()
                             error = r.get("error")
                             if error:
-                                status, msg = error['status'], error['message']
-                                if status == "PERMISSION_DENIED" and msg == "The request is missing a valid API key.":
-                                    # Update API key
-                                    return False
-                                logger.debug(f"Network error: {status} {msg}")
+                                raise NetworkError(f"{error['status']} {error['message']}")
                         except json.JSONDecodeError:
-                            logger.debug(f"Network error: {await response.text()}")
-                        finally:
-                            raise NetworkError
+                            raise NetworkError(f"{await response.text()}")
+                        except Exception as e:
+                            raise NetworkError(f"Unknown error: {str(e)}")
                     self.resp = response
                     return response
             except Exception as e:
-                logger.debug(f"Critical network error: {e}")
+                logger.warning(f"Critical network error: {e}")
                 await asyncio.sleep(3)
                 continue
         raise NetworkError("Max retries reached")
@@ -144,3 +142,20 @@ class http_request:
     async def __aexit__(self, _, __, ___):
         if self.resp:
             self.resp.close()
+
+
+def gen_yt_upload_session_id():
+    session_id = ""
+    b, c = 0, 0
+    for i in range(36):
+        if i in (8, 13, 18, 23):
+            session_id += "-"
+        elif i == 14:
+            session_id += "4"
+        else:
+            if b <= 2:
+                b = int(33554432 + 16777216 * random())
+            c = b & 15
+            b >>= 4
+            session_id += sid_char[c & 3 | 8 if i == 19 else c]
+    return f"innertube_studio:{session_id}:0"
