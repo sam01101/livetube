@@ -57,9 +57,9 @@ class InternalAPI:
     client_name = "WEB"
     client_browser_name = "Chrome"
     client_browser_version = "90.0.4430.72"
-    yt_client_name = "1"
+    yt_client_name = 1
     yt_client_version = "2.20770101.00.00"
-    studio_client_name = "62"
+    studio_client_name = 62
     studio_client_version = "1.20770101.00.00"
     endpoint = "%s/youtubei" % yt_root_url
 
@@ -78,19 +78,27 @@ class InternalAPI:
                 if self[k] != v:
                     self[k] = v
 
-    def update_html(self, script: dict):
+    def update_html(self, script: dict, studio: bool):
         """Update data from html's js"""
         client = script['INNERTUBE_CONTEXT']['client']
         self.update({
             "key": script['INNERTUBE_API_KEY'],
             "version": script['INNERTUBE_API_VERSION'],
-            # "client_name": script['INNERTUBE_CLIENT_NAME'],
+            "client_name": script['INNERTUBE_CLIENT_NAME'],
             "client_version": script['INNERTUBE_CLIENT_VERSION'],
             "client_browser_name": client.get("browserName", self.client_browser_name),
             "client_browser_version": client.get("browserVersion", self.client_browser_name),
-            "yt_client_name": script['INNERTUBE_CONTEXT_CLIENT_NAME'],
-            "yt_client_version": script['INNERTUBE_CONTEXT_CLIENT_VERSION'],
         })
+        if studio:
+            self.update({
+                "studio_client_name": script['INNERTUBE_CLIENT_NAME'],
+                "studio_client_version": script['INNERTUBE_CLIENT_VERSION'],
+            })
+        else:
+            self.update({
+                "yt_client_name": script['INNERTUBE_CONTEXT_CLIENT_NAME'],
+                "yt_client_version": script['INNERTUBE_CONTEXT_CLIENT_VERSION'],
+            })
 
     async def fetch(self, force=False, studio=False, cookie: dict = None):
         """
@@ -115,7 +123,7 @@ class InternalAPI:
         async with http_request(shared_tcp_pool[client_id],
                                 url=studio_root_url if studio else yt_root_url,
                                 header=default_header, cookie=cookie if studio else {}) as response:
-            self.update_html(player.get_ytplayer_setconfig(ScriptTaker(await response.text()).scripts))
+            self.update_html(player.get_ytplayer_setconfig(ScriptTaker(await response.text()).scripts), studio)
 
 
 class JSCache:

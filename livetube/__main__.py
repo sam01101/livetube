@@ -1130,10 +1130,14 @@ class Studio:
         video_id = data.get("videoId")
         if video_id:
             response['video_id'] = video_id
-        contents = data.get("contents")
+        contents = data.get("contents") or data.get("continuationContents", [None])[0]
         if contents:
             contents = contents.get("uploadFeedbackItemRenderer") or contents.get("uploadFeedbackItemContinuation")
-            response['continue_token'] = contents['continuations'][1]['uploadFeedbackRefreshContinuation']['continuation']
+            response['continue_token'] = (contents['continuations'][1]
+                ['uploadFeedbackRefreshContinuation'][ 'continuation'])
+            id_content = contents.get("id")
+            if id_content and not response.get("video_id"):
+                response['video_id'] = id_content.get("video_id")
             if contents.get("uploadStatus"):
                 response['status'] = contents['uploadStatus']['uploadStatus']
             process_progress = contents.get("processingProgressBar")
@@ -1149,6 +1153,20 @@ class Studio:
                     upload['remain'] = upload_progress['remainingTimeSeconds']
                 response['upload'] = upload
         return response
+
+    async def get_video_progress(self, continue_token: str):
+        await yt_internal_api.fetch(studio=True, cookie=self.cookie)
+        endpoint = studio_root_url + f"/youtubei/{yt_internal_api.version}/upload/feedback"
+        endpoint += f"?alt=json&key=" + yt_internal_api.key
+        async with http_request(self.http, "POST", url=endpoint, header=calculate_SNAPPISH(self.cookie, self.header),
+                                cookie=self.cookie, json_data={
+                    "context": {
+                        "client": get_yt_client_info(studio=True)
+                    },
+                    "continuations": [continue_token]
+                }) as response:
+            if response.status == 200:
+                return self._handle_feedback(await response.json())
 
     async def create_video(self, upload_session: str, bg_token: str,
                            title="", description="", is_draft: bool = None,
@@ -1242,16 +1260,16 @@ class Studio:
         video_id = None
         async with http_request(self.http, "POST", url=endpoint, header=calculate_SNAPPISH(self.cookie, self.header),
                                 cookie=self.cookie, json_data={
-            "context": context,
-            "botguardClientResponse": bg_token,
-            "frontendUploadId": upload_session,
-            "resourceId": {
-                "scottyResourceId": {
-                    "id": self.upload_cache[upload_session]['scotty-resource-id']
-                }
-            },
-            "initialMetadata": {}
-        }) as response:
+                    "context": context,
+                    "botguardClientResponse": bg_token,
+                    "frontendUploadId": upload_session,
+                    "resourceId": {
+                        "scottyResourceId": {
+                            "id": self.upload_cache[upload_session]['scotty-resource-id']
+                        }
+                    },
+                    "initialMetadata": {}
+                }) as response:
             if response.status == 200:
                 js_resp = await response.json()
                 feedback = self._handle_feedback(js_resp)
