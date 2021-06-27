@@ -78,7 +78,7 @@ class InternalAPI:
                 if self[k] != v:
                     self[k] = v
 
-    def update_html(self, script: dict, studio: bool):
+    def update_html(self, script: dict, studio=False):
         """Update data from html's js"""
         client = script['INNERTUBE_CONTEXT']['client']
         self.update({

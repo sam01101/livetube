@@ -2,8 +2,8 @@ from setuptools import setup, find_packages
 
 setup(
    name='livetube',
-   version='2.2.0',
-   description='A module for youtube livestream',
+   version='2.2.1',
+   description='A python module aims to youtube livestream & studio',
    url="https://github.com/sam01101/livetube",
    author='Sam',
    author_email='sam@vtr.ac',
