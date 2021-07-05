@@ -1106,7 +1106,7 @@ class Studio:
         async with http_request(self.http, "POST", url=endpoint, header=calculate_SNAPPISH(self.cookie, header),
                                 cookie=self.cookie, json_data={
                     "context": {
-                        "client": get_yt_client_info()
+                        "client": get_yt_client_info(studio=True)
                     },
                     "challenge": challenge_data,
                     "botguardResponse": bg_token
