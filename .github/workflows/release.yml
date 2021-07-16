@@ -21,7 +21,7 @@ jobs:
     - name: Cache PyPI
       uses: actions/cache@v2.1.6
       with:
-        key: pip-publish-${{ hashCreateds('requirements/*.txt') }}
+        key: pip-publish-${{ hashFiles('requirements/*.txt') }}
         path: ~/.cache/pip
         restore-keys: |
           pip-publish-
