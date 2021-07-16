@@ -13,12 +13,12 @@ No documentation, welcome to Pull Request.
   - Get animated thumbnail (Video only)
   - Show video type tag (`Members only`, `Unlisted`, `Private`)
 - `Community Post fetching` with `Attachment`
- - [x] Video
- - [x] Image (With listed image)
- - [x] Poll
- - [x] Playlist
- - [x] Shared Post
- - [x] Members only post
+     - - [x] Video
+     - - [x] Image (With listed image)
+     - - [x] Poll
+     - - [x] Playlist
+     - - [x] Shared Post
+     - - [x] Members only post
 - `Purchases and memberships` list fetch
   - `YouTube Music` `YouTube Premium` basic extraction
   - Channel ID
