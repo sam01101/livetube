@@ -1,9 +1,9 @@
 """
     livetube - A API for youtube streaming
-    作者: Sam
-    创建日期: 2020/12/18 13:15
-    文件:    exceptions.py
-    文件描述: 
+    Author: Sam
+    Created: 2020/12/18 13:15
+    File:    exceptions.py
+    Description: 
 """
 from re import Pattern
 from typing import Union

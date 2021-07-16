@@ -1,9 +1,9 @@
 """
     livetube - A API for youtube streaming
-    作者: Sam
-    创建日期: 2021/04/21 18:00
-    文件:    cache.py
-    文件描述: Cached data for reuse
+    Author: Sam
+    Created: 2021/04/21 18:00
+    File:    cache.py
+    Description: Cached data for reuse
 """
 import asyncio
 from dataclasses import dataclass

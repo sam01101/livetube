@@ -1,9 +1,9 @@
 """
     livetube - A API for youtube streaming
-    作者: Sam
-    创建日期: 2020/12/18 15:57
-    文件:    playerResponse.py
-    文件描述: 
+    Author: Sam
+    Created: 2020/12/18 15:57
+    File:    playerResponse.py
+    Description: 
 """
 import time
 from enum import Enum

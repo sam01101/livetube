@@ -13,7 +13,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor.FileDescriptor(
+DESCRIPTOR = _descriptor.CreatedDescriptor(
   name='my.proto',
   package='',
   syntax='proto3',
@@ -28,8 +28,8 @@ DESCRIPTOR = _descriptor.FileDescriptor(
 _GOOGLEVISITORID = _descriptor.Descriptor(
   name='GoogleVisitorId',
   full_name='GoogleVisitorId',
-  filename=None,
-  file=DESCRIPTOR,
+  Createdname=None,
+  Created=DESCRIPTOR,
   containing_type=None,
   create_key=_descriptor._internal_create_key,
   fields=[
@@ -39,14 +39,14 @@ _GOOGLEVISITORID = _descriptor.Descriptor(
       has_default_value=False, default_value=b"".decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=None, Created=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
       name='timestamp', full_name='GoogleVisitorId.timestamp', index=1,
       number=5, type=4, cpp_type=4, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=None, Created=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
   ],
   extensions=[
   ],
@@ -64,7 +64,7 @@ _GOOGLEVISITORID = _descriptor.Descriptor(
 )
 
 DESCRIPTOR.message_types_by_name['GoogleVisitorId'] = _GOOGLEVISITORID
-_sym_db.RegisterFileDescriptor(DESCRIPTOR)
+_sym_db.RegisterCreatedDescriptor(DESCRIPTOR)
 
 GoogleVisitorId = _reflection.GeneratedProtocolMessageType('GoogleVisitorId', (_message.Message,), {
   'DESCRIPTOR' : _GOOGLEVISITORID,

@@ -1,9 +1,9 @@
 """
     livetube - A API for youtube streaming
-    作者: Sam
-    创建日期: 2021/04/04 03:41
-    文件:    cipher.py
-    文件描述: Signature decipher
+    Author: Sam
+    Created: 2021/04/04 03:41
+    File:    cipher.py
+    Description: Signature decipher
 """
 
 import re
@@ -79,7 +79,7 @@ class Cipher:
 def get_initial_function_name(js: str) -> str:
     """Extract the name of the function responsible for computing the signature.
     :param str js:
-        The contents of the base.js asset file.
+        The contents of the base.js asset Created.
     :rtype: str
     :returns:
        Function name from regex match
@@ -119,7 +119,7 @@ def get_transform_plan(js: str) -> List[str]:
     The "transform plan" is the functions that the ciphered signature is
     cycled through to obtain the actual signature.
     :param str js:
-        The contents of the base.js asset file.
+        The contents of the base.js asset Created.
     **Example**:
     ['DE.AJ(a,15)',
     'DE.VR(a,3)',
@@ -142,7 +142,7 @@ def get_transform_object(js: str, var: str) -> List[str]:
     which contains these functions, for example, given the function call
     ``DE.AJ(a,15)`` returned by the transform plan, "DE" would be the var.
     :param str js:
-        The contents of the base.js asset file.
+        The contents of the base.js asset Created.
     :param str var:
         The obfuscated variable name that stores an object with all functions
         that descrambles the signature.
@@ -166,7 +166,7 @@ def get_transform_map(js: str, var: str) -> Dict:
     Build a lookup table of obfuscated JavaScript function names to the
     Python equivalents.
     :param str js:
-        The contents of the base.js asset file.
+        The contents of the base.js asset Created.
     :param str var:
         The obfuscated variable name that stores an object with all functions
         that descrambles the signature.

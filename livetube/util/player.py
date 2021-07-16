@@ -1,9 +1,9 @@
 """
     livetube - A API for youtube streaming
-    作者: Sam
-    创建日期: 2020/12/18 12:57
-    文件:    player.py
-    文件描述: 
+    Author: Sam
+    Created: 2020/12/18 12:57
+    File:    player.py
+    Description: 
 """
 import json
 import re

@@ -1,9 +1,9 @@
 """
     livetube - A API for youtube streaming
-    作者: Sam
-    创建日期: 2020/12/18 12:59
-    文件:    regex.py
-    文件描述: 
+    Author: Sam
+    Created: 2020/12/18 12:59
+    File:    regex.py
+    Description: 
 """
 import re
 

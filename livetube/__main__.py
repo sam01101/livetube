@@ -1,9 +1,9 @@
 """
     livetube - A API for youtube streaming
-    作者: Sam
-    创建日期: 2020/12/18 10:18
-    文件:    __main__.py
-    文件描述:
+    Author: Sam
+    Created: 2020/12/18 10:18
+    File:    __main__.py
+    Description:
 """
 
 # General
@@ -132,13 +132,13 @@ class Video:
     # ======
 
     def update_cookie(self, cookie: dict):
-        """更新 Cookie"""
+        """Updates Cookie"""
         cookie.update({"PREF": "hl=en"})
         self.cookie = cookie
 
     async def get_anim_thumbnail(self) -> str:
         """
-        获取动态缩图
+        Get animated thumbnail (Like GIF)
 
         :raise NetworkError: Problem while getting thumbnail
         :return str: Url of thumbnail
@@ -241,7 +241,7 @@ class Video:
                     self.player_response.videoDetails.title = title
 
     async def fetch_metadata(self):
-        """更新直播信息"""
+        """Update livestream metadata"""
         if not self.player_response:
             return
         self.debug("Fetching metadata")
@@ -267,7 +267,7 @@ class Video:
                 self._update_actions(actions)
 
     async def fetch_heartbeat(self):
-        """更新直播心跳"""
+        """Update livestream heartbeat"""
         if not self.player_response:
             return
         # Threat this like a dynamic update list object
@@ -305,9 +305,9 @@ class Video:
 
     async def fetch_player(self):
         """
-        使用 player 刷新视频信息
+        Use player to update video data
 
-        :raise NetworkError: 网络错误
+        :raise NetworkError: Network problem
         """
         if not self.player_response:
             return
@@ -459,7 +459,7 @@ class Video:
 
     async def fetch(self):
         """
-        下载并解析油管视频
+        Download and extract Youtube video
 
         :raises ExtractError: Failed to extract data
         :raises NetworkError: Problem fetching data
@@ -1001,7 +1001,7 @@ class Studio:
             raise ValueError("SAPISID not found, please check your cookie.")
         self.cookie = cookie
 
-    async def _upload_video(self, file: BytesIO, session_id: str):
+    async def _upload_video(self, Created: BytesIO, session_id: str):
         """
         Actual upload function, uploads video chunk to UploadServer
 
@@ -1014,7 +1014,7 @@ class Studio:
         while True:
             # noinspection PyBroadException
             try:
-                chunk = file.read(104857600)
+                chunk = Created.read(104857600)
                 upload_cmd = []
                 if len(chunk) > 0:
                     upload_cmd.append("upload")
@@ -1023,7 +1023,7 @@ class Studio:
                 if not upload_cmd:
                     return True
                 header.update({
-                    "X-Goog-Upload-File-Name": data['file-name'],
+                    "X-Goog-Upload-Created-Name": data['Created-name'],
                     "X-Goog-Upload-Offset": str(last_end_offset),
                     "X-Goog-Upload-Command": ", ".join(upload_cmd),
                 })
@@ -1037,28 +1037,27 @@ class Studio:
             except Exception:
                 pass
 
-    async def upload_video(self, file: Union[BytesIO, BinaryIO], file_name: str = ""):
+    async def upload_video(self, Created: Union[BytesIO, BinaryIO], Created_name: str = ""):
         """
         Uploads video to youtube
 
-        :param file: file stream
-        :param file_name: file name
-        :param async_upload: Upload all chunk at one time
+        :param Created: Created stream
+        :param Created_name: Created name
         :raise RuntimeError: Failed to start upload session
         :return: upload session id, a task that uploading the video
         """
 
-        def get_file_size() -> int:
-            file.seek(0, 2)
-            size = file.tell()
-            file.seek(0, 0)
+        def get_created_size() -> int:
+            Created.seek(0, 2)
+            size = Created.tell()
+            Created.seek(0, 0)
             return size
 
         header = self.header.copy()
         header.update({
             "X-Goog-Upload-Command": "start",
-            "X-Goog-Upload-File-Name": file_name,
-            "X-Goog-Upload-Header-Content-Length": str(get_file_size()),
+            "X-Goog-Upload-Created-Name": Created_name,
+            "X-Goog-Upload-Header-Content-Length": str(get_created_size()),
             "X-Goog-Upload-Protocol": "resumable"
         })
         upload_session_id = gen_yt_upload_session_id()
@@ -1067,11 +1066,11 @@ class Studio:
                                 json_data={"frontendUploadId": upload_session_id}) as response:
             if response.status == 200:
                 self.upload_cache[upload_session_id] = {
-                    "file-name": file_name,
+                    "Created-name": Created_name,
                     "upload-url": response.headers.get("x-goog-upload-url"),
                     "scotty-resource-id": response.headers.get("x-goog-upload-header-scotty-resource-id")
                 }
-                task = asyncio.create_task(self._upload_video(file, upload_session_id))
+                task = asyncio.create_task(self._upload_video(Created, upload_session_id))
                 self.upload_cache[upload_session_id]['task'] = task
                 return upload_session_id, task
             else:

@@ -1,9 +1,9 @@
 """
     livetube - A API for youtube streaming
-    作者: Sam
-    创建日期: 2020/12/18 10:18
-    文件:    utils.py
-    文件描述: Functions that publicly use
+    Author: Sam
+    Created: 2020/12/18 10:18
+    File:    utils.py
+    Description: Functions that publicly use
 """
 import asyncio
 import json

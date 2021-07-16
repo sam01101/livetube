@@ -1,4 +1,4 @@
-uvloop
+uvloop  # Optional
 aiohttp[speedups]
 yarl
 

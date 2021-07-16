@@ -13,7 +13,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor.FileDescriptor(
+DESCRIPTOR = _descriptor.CreatedDescriptor(
   name='my.proto',
   package='',
   syntax='proto3',
@@ -28,8 +28,8 @@ DESCRIPTOR = _descriptor.FileDescriptor(
 _CONTINUATIONCOMMAND_ENTRY_DETAILS_CHANNELDETAILS = _descriptor.Descriptor(
   name='ChannelDetails',
   full_name='ContinuationCommand.Entry.Details.ChannelDetails',
-  filename=None,
-  file=DESCRIPTOR,
+  Createdname=None,
+  Created=DESCRIPTOR,
   containing_type=None,
   create_key=_descriptor._internal_create_key,
   fields=[
@@ -39,14 +39,14 @@ _CONTINUATIONCOMMAND_ENTRY_DETAILS_CHANNELDETAILS = _descriptor.Descriptor(
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=None, Created=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
       name='channelId', full_name='ContinuationCommand.Entry.Details.ChannelDetails.channelId', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=b"".decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=None, Created=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
   ],
   extensions=[
   ],
@@ -66,8 +66,8 @@ _CONTINUATIONCOMMAND_ENTRY_DETAILS_CHANNELDETAILS = _descriptor.Descriptor(
 _CONTINUATIONCOMMAND_ENTRY_DETAILS = _descriptor.Descriptor(
   name='Details',
   full_name='ContinuationCommand.Entry.Details',
-  filename=None,
-  file=DESCRIPTOR,
+  Createdname=None,
+  Created=DESCRIPTOR,
   containing_type=None,
   create_key=_descriptor._internal_create_key,
   fields=[
@@ -77,21 +77,21 @@ _CONTINUATIONCOMMAND_ENTRY_DETAILS = _descriptor.Descriptor(
       has_default_value=False, default_value=b"".decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=None, Created=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
       name='channelType', full_name='ContinuationCommand.Entry.Details.channelType', index=1,
       number=2, type=5, cpp_type=1, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=None, Created=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
       name='channelDetails', full_name='ContinuationCommand.Entry.Details.channelDetails', index=2,
       number=3, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=None, Created=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
   ],
   extensions=[
   ],
@@ -111,8 +111,8 @@ _CONTINUATIONCOMMAND_ENTRY_DETAILS = _descriptor.Descriptor(
 _CONTINUATIONCOMMAND_ENTRY = _descriptor.Descriptor(
   name='Entry',
   full_name='ContinuationCommand.Entry',
-  filename=None,
-  file=DESCRIPTOR,
+  Createdname=None,
+  Created=DESCRIPTOR,
   containing_type=None,
   create_key=_descriptor._internal_create_key,
   fields=[
@@ -122,7 +122,7 @@ _CONTINUATIONCOMMAND_ENTRY = _descriptor.Descriptor(
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=None, Created=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
   ],
   extensions=[
   ],
@@ -142,8 +142,8 @@ _CONTINUATIONCOMMAND_ENTRY = _descriptor.Descriptor(
 _CONTINUATIONCOMMAND = _descriptor.Descriptor(
   name='ContinuationCommand',
   full_name='ContinuationCommand',
-  filename=None,
-  file=DESCRIPTOR,
+  Createdname=None,
+  Created=DESCRIPTOR,
   containing_type=None,
   create_key=_descriptor._internal_create_key,
   fields=[
@@ -153,7 +153,7 @@ _CONTINUATIONCOMMAND = _descriptor.Descriptor(
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=None, Created=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
   ],
   extensions=[
   ],
@@ -174,8 +174,8 @@ _CONTINUATIONCOMMAND = _descriptor.Descriptor(
 _CONTINUATIONCOMMANDENTRY_ENTRY = _descriptor.Descriptor(
   name='Entry',
   full_name='ContinuationCommandEntry.Entry',
-  filename=None,
-  file=DESCRIPTOR,
+  Createdname=None,
+  Created=DESCRIPTOR,
   containing_type=None,
   create_key=_descriptor._internal_create_key,
   fields=[
@@ -185,21 +185,21 @@ _CONTINUATIONCOMMANDENTRY_ENTRY = _descriptor.Descriptor(
       has_default_value=False, default_value=b"".decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=None, Created=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
       name='details', full_name='ContinuationCommandEntry.Entry.details', index=1,
       number=3, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=b"".decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=None, Created=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
       name='targetId', full_name='ContinuationCommandEntry.Entry.targetId', index=2,
       number=35, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=b"".decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=None, Created=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
   ],
   extensions=[
   ],
@@ -219,8 +219,8 @@ _CONTINUATIONCOMMANDENTRY_ENTRY = _descriptor.Descriptor(
 _CONTINUATIONCOMMANDENTRY = _descriptor.Descriptor(
   name='ContinuationCommandEntry',
   full_name='ContinuationCommandEntry',
-  filename=None,
-  file=DESCRIPTOR,
+  Createdname=None,
+  Created=DESCRIPTOR,
   containing_type=None,
   create_key=_descriptor._internal_create_key,
   fields=[
@@ -230,7 +230,7 @@ _CONTINUATIONCOMMANDENTRY = _descriptor.Descriptor(
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=None, Created=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
   ],
   extensions=[
   ],
@@ -257,7 +257,7 @@ _CONTINUATIONCOMMANDENTRY_ENTRY.containing_type = _CONTINUATIONCOMMANDENTRY
 _CONTINUATIONCOMMANDENTRY.fields_by_name['entry'].message_type = _CONTINUATIONCOMMANDENTRY_ENTRY
 DESCRIPTOR.message_types_by_name['ContinuationCommand'] = _CONTINUATIONCOMMAND
 DESCRIPTOR.message_types_by_name['ContinuationCommandEntry'] = _CONTINUATIONCOMMANDENTRY
-_sym_db.RegisterFileDescriptor(DESCRIPTOR)
+_sym_db.RegisterCreatedDescriptor(DESCRIPTOR)
 
 ContinuationCommand = _reflection.GeneratedProtocolMessageType('ContinuationCommand', (_message.Message,), {
 

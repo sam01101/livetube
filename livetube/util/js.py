@@ -1,9 +1,9 @@
 """
     livetube - A API for youtube streaming
-    作者: Sam
-    创建日期: 2020/12/18 12:56
-    文件:    js.py
-    文件描述: 
+    Author: Sam
+    Created: 2020/12/18 12:56
+    File:    js.py
+    Description: 
 """
 from typing import Union, Optional
 from urllib.parse import quote, urlencode
