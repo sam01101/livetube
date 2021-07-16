@@ -545,9 +545,9 @@ class Community:
 
     def _make_attachment(self, post_id: str, attachment: dict) -> Optional[Post]:
         video_attach = attachment.get("videoRenderer")
-        image_attach, images_attach, poll_attach = (
+        image_attach, images_attach, poll_attach, playlist_attach = (
             attachment.get("backstageImageRenderer"), attachment.get("postMultiImageRenderer"),
-            attachment.get("pollRenderer")
+            attachment.get("pollRenderer"), attachment.get("playlistRenderer")
         )
         if video_attach:
             video_id = video_attach.get("videoId")
@@ -585,6 +585,20 @@ class Community:
                 choices
             )
             attach = Post.Attachment("poll", poll)
+        elif playlist_attach:
+            query = "thumbnailRenderer/playlistVideoThumbnailRenderer/thumbnail/thumbnails/0"
+            thumbnail = query_selector(playlist_attach, query) or ""
+            if thumbnail:
+                thumbnail = thumbnail.get("url", "")
+            playlist = Post.Attachment.Playlist(
+                playlist_attach['playlistId'],
+                get_text(playlist_attach['title']),
+                int(playlist_attach['videoCount']),
+                thumbnail,
+                get_text(playlist_attach['shortBylineText']),
+                get_text(playlist_attach['publishedTimeText'])
+            )
+            attach = Post.Attachment("playlist", playlist)
         else:
             self.warn(f"Unknown attachment type in post {post_id}")
             attach = None

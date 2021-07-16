@@ -20,9 +20,10 @@ class Post:
 
     @dataclass
     class Attachment:
-        # video, image, poll
+        # video, image, poll, playlist
         attach_type: str
-        attach: Union["Post.Attachment.Video", "Post.Attachment.Image", "Post.Attachment.Poll"]
+        attach: Union["Post.Attachment.Video", "Post.Attachment.Image",
+                      "Post.Attachment.Poll", "Post.Attachment.Playlist"]
 
         @dataclass
         class Video:
@@ -65,6 +66,25 @@ class Post:
                 return {
                     "vote_count": self.votes,
                     "choices": self.choices
+                }
+
+        @dataclass
+        class Playlist:
+            playlist_id: str
+            title: str
+            video_count: int
+            thumbnail: str
+            creator: str
+            updated_since: str
+
+            def to_json(self):
+                return {
+                    "playlist_id": self.playlist_id,
+                    "title": self.title,
+                    "video_count": self.video_count,
+                    "thumbnail": self.thumbnail,
+                    "creator": self.creator,
+                    "update_time": self.updated_since
                 }
 
     def to_json(self):
